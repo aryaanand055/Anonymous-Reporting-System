@@ -1,0 +1,98 @@
+"use client";
+
+import { Report, DEPARTMENT_LABELS, PRIORITY_LABELS, STATUS_LABELS } from "@/types/reports";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { MapPin, Clock, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { cn } from "@/lib/utils";
+
+interface ReportCardProps {
+  report: Report;
+  showAdminActions?: boolean;
+}
+
+export function ReportCard({ report, showAdminActions = true }: ReportCardProps) {
+  const updateStatus = async (newStatus: Report["status"]) => {
+    try {
+      const reportRef = doc(db, "reports", report.id);
+      await updateDoc(reportRef, { status: newStatus });
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
+  };
+
+  const priorityColors = {
+    high: "bg-priority-high text-white border-transparent",
+    medium: "bg-priority-medium text-white border-transparent",
+    low: "bg-priority-low text-white border-transparent",
+  };
+
+  const statusColors = {
+    pending: "bg-status-pending/10 text-status-pending border-status-pending/20",
+    in_progress: "bg-status-progress/10 text-status-progress border-status-progress/20",
+    resolved: "bg-status-resolved/10 text-status-resolved border-status-resolved/20",
+  };
+
+  return (
+    <Card className="overflow-hidden border-l-4 border-l-primary/20 hover:shadow-md transition-all duration-200">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+        <div className="space-y-1">
+          <CardTitle className="text-lg font-headline font-semibold text-foreground leading-tight">
+            {report.title}
+          </CardTitle>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              {report.location}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {format(report.createdAt.toDate(), "MMM d, h:mm a")}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={cn("capitalize px-2 py-0.5", statusColors[report.status])}>
+            {STATUS_LABELS[report.status]}
+          </Badge>
+          {showAdminActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors">
+                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => updateStatus("pending")}>Mark Pending</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => updateStatus("in_progress")}>Mark In Progress</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => updateStatus("resolved")}>Mark Resolved</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+          {report.description}
+        </p>
+        <div className="flex items-center justify-between pt-2 border-t border-muted">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {DEPARTMENT_LABELS[report.department]}
+          </span>
+          <Badge className={cn("capitalize", priorityColors[report.priority])}>
+            {PRIORITY_LABELS[report.priority]} Priority
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
