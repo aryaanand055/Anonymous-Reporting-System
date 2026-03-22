@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, orderBy, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { getReports } from "@/app/actions/reports";
 import { Report, Department, Priority, ReportStatus } from "@/types/reports";
 import { ReportCard } from "@/components/ReportCard";
 import { Input } from "@/components/ui/input";
@@ -29,22 +28,13 @@ export function DashboardView({ department, title }: DashboardViewProps) {
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
 
   useEffect(() => {
-    let q = query(collection(db, "reports"), orderBy("createdAt", "desc"));
-
-    if (department) {
-      q = query(q, where("department", "==", department));
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedReports = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Report[];
+    async function loadReports() {
+      setLoading(true);
+      const fetchedReports = await getReports(department);
       setReports(fetchedReports);
       setLoading(false);
-    });
-
-    return () => unsubscribe();
+    }
+    loadReports();
   }, [department]);
 
   const filteredReports = reports.filter((report) => {

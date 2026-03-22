@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { createReport } from "@/app/actions/reports";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -56,16 +55,16 @@ export function ReportForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
     try {
-      await addDoc(collection(db, "reports"), {
-        ...values,
-        status: "pending",
-        createdAt: serverTimestamp(),
-      });
-      toast({
-        title: "Report Submitted",
-        description: "Your report has been successfully recorded and sent to the department.",
-      });
-      router.push("/");
+      const result = await createReport(values);
+      if (result.success) {
+        toast({
+          title: "Report Submitted",
+          description: "Your report has been successfully recorded and sent to the department.",
+        });
+        router.push("/");
+      } else {
+        throw new Error(result.error);
+      }
     } catch (error) {
       console.error("Submission error:", error);
       toast({

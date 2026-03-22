@@ -1,5 +1,3 @@
-import { Timestamp } from "firebase/firestore";
-
 export type Department = "human_rights" | "fire";
 export type Priority = "low" | "medium" | "high";
 export type ReportStatus = "pending" | "in_progress" | "resolved";
@@ -12,7 +10,8 @@ export interface Report {
   department: Department;
   priority: Priority;
   status: ReportStatus;
-  createdAt: Timestamp;
+  aiSummary?: string;
+  createdAt: Date | string;
 }
 
 export const DEPARTMENT_LABELS: Record<Department, string> = {

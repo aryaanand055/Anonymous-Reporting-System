@@ -11,8 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { updateReportStatus } from "@/app/actions/reports";
 import { cn } from "@/lib/utils";
 
 interface ReportCardProps {
@@ -23,8 +22,7 @@ interface ReportCardProps {
 export function ReportCard({ report, showAdminActions = true }: ReportCardProps) {
   const updateStatus = async (newStatus: Report["status"]) => {
     try {
-      const reportRef = doc(db, "reports", report.id);
-      await updateDoc(reportRef, { status: newStatus });
+      await updateReportStatus(report.id, newStatus);
     } catch (error) {
       console.error("Error updating status:", error);
     }
@@ -56,7 +54,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
             </span>
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
-              {format(report.createdAt.toDate(), "MMM d, h:mm a")}
+              {format(new Date(report.createdAt), "MMM d, h:mm a")}
             </span>
           </div>
         </div>
@@ -84,6 +82,22 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
         <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
           {report.description}
         </p>
+        
+        {report.aiSummary && (
+          <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-500">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary/80">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              AI Insight
+            </div>
+            <p className="text-xs italic text-foreground leading-snug">
+              "{report.aiSummary}"
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between pt-2 border-t border-muted">
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {DEPARTMENT_LABELS[report.department]}
