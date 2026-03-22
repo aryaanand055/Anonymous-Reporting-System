@@ -42,7 +42,7 @@ export async function getReports(department?: Department): Promise<Report[]> {
       priority: report.priority,
       status: report.status,
       aiSummary: report.aiSummary,
-      createdAt: report.createdAt.toISOString(),
+      createdAt: report.createdAt instanceof Date ? report.createdAt.toISOString() : new Date().toISOString(),
     }));
   } catch (error) {
     console.error("Failed to fetch reports:", error);

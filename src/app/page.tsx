@@ -12,7 +12,7 @@ export default function Home() {
             <div className="bg-primary w-8 h-8 rounded-lg flex items-center justify-center">
               <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
-            <h1 className="text-xl font-headline font-bold text-primary tracking-tight">SentinelFlow</h1>
+            <h1 className="text-xl font-headline font-bold text-primary tracking-tight">ANONYMOUS REPORTING</h1>
           </div>
           <Link href="/submit">
             <Button size="sm" className="bg-primary hover:bg-primary/90 gap-2">
@@ -27,11 +27,10 @@ export default function Home() {
         <div className="max-w-4xl mx-auto space-y-12">
           <div className="text-center space-y-4">
             <h2 className="text-4xl md:text-5xl font-headline font-extrabold text-foreground tracking-tight">
-              Incident Management <span className="text-primary">Evolved.</span>
+              Your Safety, <span className="text-primary">Our Priority.</span>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Real-time synchronization between public reports and specialized departments.
-              Information-first design for critical response times.
+              A secure, anonymous reporting platform created by <span className="text-foreground font-bold italic underline decoration-primary/30">Arya</span>. Report incidents with confidence.
             </p>
           </div>
 

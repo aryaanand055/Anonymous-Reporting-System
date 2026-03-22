@@ -17,7 +17,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="bg-primary w-8 h-8 rounded-lg flex items-center justify-center">
             <Shield className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-headline font-bold text-primary tracking-tight text-xl">SentinelFlow</span>
+          <span className="font-headline font-bold text-primary tracking-tight text-xl text-balance">Anonymous Reporting</span>
         </div>
         
         <nav className="flex-1 p-4 space-y-2 mt-4">
