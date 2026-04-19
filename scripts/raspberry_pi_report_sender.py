@@ -51,7 +51,7 @@ def send_report(api_url: str, api_key: str, payload: dict) -> None:
 
 def main() -> int:
     api_url = os.getenv("REPORT_API_URL", "https://anonymous-reporting-system-eight.vercel.app/api/reports")
-    api_key = os.getenv("HARDWARE_API_KEY")
+    api_key = os.getenv("reporting-system12")
 
     if not api_key:
         print("Error: HARDWARE_API_KEY environment variable is not set.")
