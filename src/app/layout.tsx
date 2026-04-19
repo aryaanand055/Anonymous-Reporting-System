@@ -48,8 +48,11 @@ export const metadata: Metadata = {
     images: ['/p1.png'],
   },
   icons: {
-    icon: '/p2.png',
-    apple: '/apple-touch-icon.svg',
+    icon: [
+      { url: '/p2.png?v=2', type: 'image/png' },
+    ],
+    shortcut: '/p2.png?v=2',
+    apple: '/p2.png?v=2',
   },
   themeColor: '#08111f',
 };
@@ -64,6 +67,9 @@ export default function RootLayout({
       <head>
         <meta name="author" content="Arya" />
         <meta name="theme-color" content="#08111f" />
+        <link rel="icon" href="/p2.png?v=2" type="image/png" />
+        <link rel="shortcut icon" href="/p2.png?v=2" />
+        <link rel="apple-touch-icon" href="/p2.png?v=2" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
