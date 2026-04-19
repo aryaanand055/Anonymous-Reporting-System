@@ -4,7 +4,7 @@ import { DashboardView } from "@/components/DashboardView";
 export default function AdminDashboardPage() {
   return (
     <DashboardLayout>
-      <DashboardView title="Administrative Hub" />
+      <DashboardView title="Administrative Hub" showAdminActions />
     </DashboardLayout>
   );
 }

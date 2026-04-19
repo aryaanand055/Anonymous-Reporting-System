@@ -2,7 +2,7 @@
 
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { Report, Department, ReportStatus } from "@/types/reports";
+import { Report, Department, Priority, ReportStatus } from "@/types/reports";
 import { revalidatePath } from "next/cache";
 import { generateReportSummary } from "@/ai/summarize";
 
@@ -79,6 +79,36 @@ export async function updateReportStatus(reportId: string, status: ReportStatus)
   } catch (error) {
     console.error("Failed to update report status:", error);
     return { success: false, error: "Failed to update status" };
+  }
+}
+
+export async function updateReportRouting(
+  reportId: string,
+  updates: { priority?: Priority; department?: Department }
+) {
+  await dbConnect();
+  try {
+    const existingReport = await ReportModel.findById(reportId).select("department").lean();
+    if (!existingReport) {
+      return { success: false, error: "Report not found" };
+    }
+
+    await ReportModel.findByIdAndUpdate(reportId, {
+      ...(updates.priority ? { priority: updates.priority, severityLevel: updates.priority } : {}),
+      ...(updates.department ? { department: updates.department } : {}),
+    });
+
+    revalidatePath("/");
+    revalidatePath("/dashboard/admin");
+    revalidatePath(`/dashboard/${existingReport.department.replace("_", "-")}`);
+    if (updates.department && updates.department !== existingReport.department) {
+      revalidatePath(`/dashboard/${updates.department.replace("_", "-")}`);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update report routing:", error);
+    return { success: false, error: "Failed to update report routing" };
   }
 }
 

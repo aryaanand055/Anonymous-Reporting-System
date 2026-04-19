@@ -18,9 +18,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface DashboardViewProps {
   department?: Department;
   title: string;
+  showAdminActions?: boolean;
 }
 
-export function DashboardView({ department, title }: DashboardViewProps) {
+export function DashboardView({ department, title, showAdminActions = false }: DashboardViewProps) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -118,7 +119,7 @@ export function DashboardView({ department, title }: DashboardViewProps) {
       ) : filteredReports.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredReports.map((report) => (
-            <ReportCard key={report.id} report={report} />
+            <ReportCard key={report.id} report={report} showAdminActions={showAdminActions} />
           ))}
         </div>
       ) : (

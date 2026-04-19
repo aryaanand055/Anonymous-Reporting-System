@@ -6,12 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { MapPin, Clock, MoreVertical, FileText } from "lucide-react";
 import {
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { updateReportStatus } from "@/app/actions/reports";
+import { updateReportRouting, updateReportStatus } from "@/app/actions/reports";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
@@ -26,6 +28,14 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
       await updateReportStatus(report.id, newStatus);
     } catch (error) {
       console.error("Error updating status:", error);
+    }
+  };
+
+  const updateRouting = async (updates: { priority?: Report["priority"]; department?: Report["department"] }) => {
+    try {
+      await updateReportRouting(report.id, updates);
+    } catch (error) {
+      console.error("Error updating report routing:", error);
     }
   };
 
@@ -71,9 +81,23 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => updateStatus("pending")}>Mark Pending</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => updateStatus("in_progress")}>Mark In Progress</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => updateStatus("resolved")}>Mark Resolved</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Priority</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => updateRouting({ priority: "high" })}>Set High</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => updateRouting({ priority: "medium" })}>Set Medium</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => updateRouting({ priority: "low" })}>Set Low</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Department</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => updateRouting({ department: "human_rights" })}>
+                  Move to Human Rights
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => updateRouting({ department: "fire" })}>
+                  Move to Fire Department
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}

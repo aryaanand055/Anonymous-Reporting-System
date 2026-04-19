@@ -184,6 +184,66 @@
   animation: glitterPulse 6.4s ease-in-out infinite;
 }
 
+.privacy-grid-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 85%);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.aurora-sweep {
+  background: linear-gradient(90deg, transparent 0%, hsl(var(--primary) / 0.12) 30%, hsl(var(--accent) / 0.14) 60%, transparent 100%);
+  filter: blur(24px);
+  animation: auroraSlide 11s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.glass-noise {
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(hsl(var(--foreground) / 0.045) 0.8px, transparent 0.8px);
+  background-size: 4px 4px;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.tilt-on-hover {
+  transform-style: preserve-3d;
+}
+
+@media (hover: hover) {
+  .tilt-on-hover:hover {
+    transform: perspective(1000px) rotateX(1.5deg) rotateY(-2deg) translateY(-3px);
+  }
+}
+
+.shimmer-line {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary-foreground) / 0.65), transparent);
+  animation: shimmerTravel 2.6s linear infinite;
+}
+
 @keyframes heroFloat {
   0% {
     transform: translateY(0px) scale(1);
@@ -209,5 +269,32 @@
 
   100% {
     opacity: 0.35;
+  }
+}
+
+@keyframes auroraSlide {
+  0% {
+    transform: translateX(-22%);
+    opacity: 0.45;
+  }
+
+  50% {
+    transform: translateX(12%);
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translateX(-22%);
+    opacity: 0.45;
+  }
+}
+
+@keyframes shimmerTravel {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(320%);
   }
 }
