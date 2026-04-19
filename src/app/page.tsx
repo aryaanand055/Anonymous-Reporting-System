@@ -16,11 +16,18 @@ export default function Home() {
             </div>
             <h1 className="text-xl font-headline font-bold text-primary tracking-tight">ANONYMOUS REPORTING</h1>
           </div>
-          <Link href="/dashboard/admin">
-            <Button size="sm" className="bg-primary hover:bg-primary/90 gap-2">
-              Open Dashboard
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/admin">
+              <Button size="sm" className="bg-primary hover:bg-primary/90 gap-2">
+                Open Dashboard
+              </Button>
+            </Link>
+            <Link href="/track">
+              <Button size="sm" variant="outline">
+                Track Status
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 

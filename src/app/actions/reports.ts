@@ -6,12 +6,23 @@ import { Report, Department, ReportStatus } from "@/types/reports";
 import { revalidatePath } from "next/cache";
 import { generateReportSummary } from "@/ai/summarize";
 
+function generateTrackingId() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 8; i += 1) {
+    suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `AR-${suffix}`;
+}
+
 export async function createReport(data: any) {
   await dbConnect();
   try {
+    const trackingId = generateTrackingId();
     const aiSummary = await generateReportSummary(data.description);
     const report = await ReportModel.create({
       ...data,
+      trackingId,
       aiSummary,
       status: "pending",
     });
@@ -20,7 +31,7 @@ export async function createReport(data: any) {
     if (data.department) {
       revalidatePath(`/dashboard/${data.department.replace("_", "-")}`);
     }
-    return { success: true, id: report._id.toString() };
+    return { success: true, id: report._id.toString(), trackingId: report.trackingId };
   } catch (error) {
     console.error("Failed to create report:", error);
     return { success: false, error: "Failed to create report" };
@@ -35,6 +46,7 @@ export async function getReports(department?: Department): Promise<Report[]> {
 
     return reports.map((report: any) => ({
       id: report._id.toString(),
+      trackingId: report.trackingId ?? "N/A",
       title: report.title ?? "Incident Report",
       description: report.description ?? "No description provided",
       location: report.location ?? "Unknown location",
@@ -67,5 +79,37 @@ export async function updateReportStatus(reportId: string, status: ReportStatus)
   } catch (error) {
     console.error("Failed to update report status:", error);
     return { success: false, error: "Failed to update status" };
+  }
+}
+
+export async function getReportStatusByTrackingId(trackingId: string) {
+  await dbConnect();
+  try {
+    const normalizedTrackingId = trackingId.trim().toUpperCase();
+    if (!normalizedTrackingId) {
+      return { success: false, error: "Tracking ID is required" };
+    }
+
+    const report = await ReportModel.findOne({ trackingId: normalizedTrackingId }).lean();
+    if (!report) {
+      return { success: false, error: "Report not found" };
+    }
+
+    return {
+      success: true,
+      report: {
+        trackingId: report.trackingId,
+        status: report.status,
+        issueType: report.issueType ?? report.title ?? "Unspecified issue",
+        location: report.location ?? "Unknown location",
+        createdAt:
+          report.createdAt instanceof Date
+            ? report.createdAt.toISOString()
+            : new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    console.error("Failed to lookup report by tracking ID:", error);
+    return { success: false, error: "Failed to fetch report status" };
   }
 }

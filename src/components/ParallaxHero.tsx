@@ -82,6 +82,11 @@ export function ParallaxHero() {
                                 View Safe Reporting Desks
                             </Button>
                         </Link>
+                        <Link href="/track">
+                            <Button variant="secondary" className="h-11 px-5">
+                                Track My Report
+                            </Button>
+                        </Link>
                     </div>
                 </div>
 

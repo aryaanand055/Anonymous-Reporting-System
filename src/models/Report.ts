@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { Department, Priority, ReportStatus } from "@/types/reports";
 
 export interface IReport extends Document {
+  trackingId: string;
   title: string;
   description: string;
   location: string;
@@ -21,6 +22,7 @@ export interface IReport extends Document {
 
 const ReportSchema: Schema = new Schema(
   {
+    trackingId: { type: String, required: true, unique: true, index: true },
     title: { type: String, required: true },
     description: { type: String, required: true },
     location: { type: String, required: true },

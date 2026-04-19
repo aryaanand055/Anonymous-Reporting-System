@@ -18,6 +18,15 @@ type HardwarePayload = {
 
 const VALID_SEVERITY = new Set(["low", "medium", "high"]);
 
+function generateTrackingId() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 8; i += 1) {
+    suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `AR-${suffix}`;
+}
+
 function inferDepartment(issueType: string) {
   const normalized = issueType.toLowerCase();
   if (/(fire|smoke|burn|explosion|electrical)/.test(normalized)) {
@@ -84,8 +93,18 @@ export async function POST(req: NextRequest) {
 
 
 
+    let trackingId = generateTrackingId();
+    for (let attempts = 0; attempts < 5; attempts += 1) {
+      const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
+      if (!existing) {
+        break;
+      }
+      trackingId = generateTrackingId();
+    }
+
     // 5. Create Report
     const report = await ReportModel.create({
+      trackingId,
       title,
       description,
       location,
@@ -112,9 +131,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Report received successfully",
-      id: report._id.toString()
+      id: report._id.toString(),
+      trackingId: report.trackingId,
     });
 
+  } catch (error) {
+    console.error("API Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    await dbConnect();
+    const trackingId = req.nextUrl.searchParams.get("trackingId")?.trim().toUpperCase();
+    if (!trackingId) {
+      return NextResponse.json({ error: "trackingId query param is required" }, { status: 400 });
+    }
+
+    const report = await ReportModel.findOne({ trackingId }).lean();
+    if (!report) {
+      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      report: {
+        trackingId: report.trackingId,
+        status: report.status,
+        issueType: report.issueType ?? report.title ?? "Unspecified issue",
+        location: report.location ?? "Unknown location",
+        createdAt:
+          report.createdAt instanceof Date
+            ? report.createdAt.toISOString()
+            : new Date().toISOString(),
+      },
+    });
   } catch (error) {
     console.error("API Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

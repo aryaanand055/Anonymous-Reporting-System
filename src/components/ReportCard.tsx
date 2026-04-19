@@ -84,6 +84,11 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
           {report.institutionType} reported on {report.reportDateLabel}. Emotional indicator: {report.emotionalIndicator}.
         </p>
 
+        <div className="inline-flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          Tracking ID
+          <span className="font-mono text-foreground">{report.trackingId}</span>
+        </div>
+
         {report.aiSummary && (
           <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-500">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary/80">

@@ -3,10 +3,8 @@
 
 Usage:
   1) Install dependency: pip install requests
-  2) Set env vars:
-     - REPORT_API_URL (default: http://localhost:9002/api/reports)
-     - HARDWARE_API_KEY (required)
-  3) Run: python raspberry_pi_report_sender.py
+    2) Optionally set REPORT_API_URL (default: http://localhost:9002/api/reports)
+    3) Run: python raspberry_pi_report_sender.py
 """
 
 import json
@@ -15,6 +13,8 @@ import sys
 from datetime import datetime
 
 import requests
+
+HARDWARE_API_KEY = "reporting-system12"
 
 
 def build_payload() -> dict:
@@ -27,7 +27,7 @@ def build_payload() -> dict:
         "issue_type": "sanitation and cleanliness",
         "severity_level": "high",
         "emotional_indicator": "frustration",
-        "raw_text": "Ward B has overflowing bins and persistent foul smell near patient beds.",
+        "raw_text": "Ward B has overflowing bins and persistent foul smell near patient beds."
     }
 
 
@@ -51,11 +51,7 @@ def send_report(api_url: str, api_key: str, payload: dict) -> None:
 
 def main() -> int:
     api_url = os.getenv("REPORT_API_URL", "https://anonymous-reporting-system-eight.vercel.app/api/reports")
-    api_key = os.getenv("reporting-system12")
-
-    if not api_key:
-        print("Error: HARDWARE_API_KEY environment variable is not set.")
-        return 1
+    api_key = HARDWARE_API_KEY
 
     payload = build_payload()
 

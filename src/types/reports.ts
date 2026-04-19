@@ -5,6 +5,7 @@ export type SeverityLevel = "low" | "medium" | "high";
 
 export interface Report {
   id: string;
+  trackingId: string;
   title: string;
   description: string;
   location: string;
