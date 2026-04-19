@@ -1,12 +1,20 @@
 export type Department = "human_rights" | "fire";
 export type Priority = "low" | "medium" | "high";
 export type ReportStatus = "pending" | "in_progress" | "resolved";
+export type SeverityLevel = "low" | "medium" | "high";
 
 export interface Report {
   id: string;
   title: string;
   description: string;
   location: string;
+  district: string;
+  reportDateLabel: string;
+  institutionType: string;
+  issueType: string;
+  severityLevel: SeverityLevel;
+  emotionalIndicator: string;
+  rawText?: string;
   department: Department;
   priority: Priority;
   status: ReportStatus;

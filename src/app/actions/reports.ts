@@ -32,15 +32,22 @@ export async function getReports(department?: Department): Promise<Report[]> {
   try {
     const query = department ? { department } : {};
     const reports = await ReportModel.find(query).sort({ createdAt: -1 }).lean();
-    
+
     return reports.map((report: any) => ({
       id: report._id.toString(),
-      title: report.title,
-      description: report.description,
-      location: report.location,
-      department: report.department,
-      priority: report.priority,
-      status: report.status,
+      title: report.title ?? "Incident Report",
+      description: report.description ?? "No description provided",
+      location: report.location ?? "Unknown location",
+      district: report.district ?? "Unknown district",
+      reportDateLabel: report.reportDateLabel ?? "Date not provided",
+      institutionType: report.institutionType ?? "Institution not specified",
+      issueType: report.issueType ?? report.title ?? "Unspecified issue",
+      severityLevel: report.severityLevel ?? report.priority ?? "medium",
+      emotionalIndicator: report.emotionalIndicator ?? "unspecified",
+      rawText: report.rawText,
+      department: report.department ?? "human_rights",
+      priority: report.priority ?? report.severityLevel ?? "medium",
+      status: report.status ?? "pending",
       aiSummary: report.aiSummary,
       createdAt: report.createdAt instanceof Date ? report.createdAt.toISOString() : new Date().toISOString(),
     }));

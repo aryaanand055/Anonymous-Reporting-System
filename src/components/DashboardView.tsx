@@ -38,9 +38,14 @@ export function DashboardView({ department, title }: DashboardViewProps) {
   }, [department]);
 
   const filteredReports = reports.filter((report) => {
+    const query = search.toLowerCase();
+    const normalize = (value?: string) => (value ?? "").toLowerCase();
+
     const matchesSearch =
-      report.title.toLowerCase().includes(search.toLowerCase()) ||
-      report.location.toLowerCase().includes(search.toLowerCase());
+      normalize(report.issueType).includes(query) ||
+      normalize(report.location).includes(query) ||
+      normalize(report.district).includes(query) ||
+      normalize(report.institutionType).includes(query);
     const matchesStatus = statusFilter === "all" || report.status === statusFilter;
     const matchesPriority = priorityFilter === "all" || report.priority === priorityFilter;
     return matchesSearch && matchesStatus && matchesPriority;
@@ -74,7 +79,7 @@ export function DashboardView({ department, title }: DashboardViewProps) {
         <div className="relative md:col-span-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search reports by title or location..."
+            placeholder="Search by issue, location, district, or institution..."
             className="pl-10"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
