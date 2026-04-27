@@ -1,10 +1,11 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Report, DEPARTMENT_LABELS, PRIORITY_LABELS, STATUS_LABELS } from "@/types/reports";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { MapPin, Clock, MoreVertical, FileText } from "lucide-react";
+import { MapPin, Clock, MoreVertical, FileText, Eye, Download, Paperclip } from "lucide-react";
 import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -16,6 +17,15 @@ import {
 import { updateReportRouting, updateReportStatus } from "@/app/actions/reports";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 interface ReportCardProps {
   report: Report;
@@ -23,6 +33,9 @@ interface ReportCardProps {
 }
 
 export function ReportCard({ report, showAdminActions = true }: ReportCardProps) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [selectedEvidenceIndex, setSelectedEvidenceIndex] = useState(0);
+
   const updateStatus = async (newStatus: Report["status"]) => {
     try {
       await updateReportStatus(report.id, newStatus);
@@ -50,6 +63,14 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
     in_progress: "bg-status-progress/10 text-status-progress border-status-progress/20",
     resolved: "bg-status-resolved/10 text-status-resolved border-status-resolved/20",
   };
+
+  const evidence = report.evidence ?? [];
+  const selectedEvidence = useMemo(() => evidence[selectedEvidenceIndex], [evidence, selectedEvidenceIndex]);
+  const previewUrl = selectedEvidence
+    ? `/api/admin/reports/${encodeURIComponent(report.trackingId)}/evidence/${encodeURIComponent(selectedEvidence.fileId)}`
+    : "";
+  const isImage = selectedEvidence?.contentType?.startsWith("image/");
+  const isPdf = selectedEvidence?.contentType === "application/pdf";
 
   return (
     <Card className="overflow-hidden border-l-4 border-l-primary/20 hover:shadow-md transition-all duration-200">
@@ -150,11 +171,136 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {DEPARTMENT_LABELS[report.department]}
           </span>
-          <Badge className={cn("capitalize", priorityColors[report.priority])}>
-            {PRIORITY_LABELS[report.priority]} Severity
-          </Badge>
+          <div className="flex items-center gap-2">
+            {evidence.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-2"
+                onClick={() => setEvidenceOpen(true)}
+              >
+                <Paperclip className="h-4 w-4" />
+                Evidence ({evidence.length})
+              </Button>
+            )}
+            <Badge className={cn("capitalize", priorityColors[report.priority])}>
+              {PRIORITY_LABELS[report.priority]} Severity
+            </Badge>
+          </div>
         </div>
       </CardContent>
+
+      <Dialog
+        open={evidenceOpen}
+        onOpenChange={(open) => {
+          setEvidenceOpen(open);
+          if (!open) {
+            setSelectedEvidenceIndex(0);
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Evidence for {report.trackingId}</DialogTitle>
+            <DialogDescription>
+              View attached evidence directly in the dashboard.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-0">
+            <div className="space-y-3 overflow-y-auto pr-1 max-h-[65vh]">
+              {evidence.map((item, index) => {
+                const active = index === selectedEvidenceIndex;
+                return (
+                  <button
+                    key={item.fileId}
+                    type="button"
+                    onClick={() => setSelectedEvidenceIndex(index)}
+                    className={cn(
+                      "w-full text-left rounded-lg border p-3 transition-colors",
+                      active ? "border-primary bg-primary/5" : "hover:bg-muted/60"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm font-medium truncate">{item.filename}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.contentType}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(item.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0">
+                        #{index + 1}
+                      </Badge>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="min-h-[55vh] flex flex-col rounded-lg border bg-muted/20 overflow-hidden">
+              {selectedEvidence ? (
+                <>
+                  <div className="flex items-center justify-between gap-3 p-4 border-b bg-background/80">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{selectedEvidence.filename}</p>
+                      <p className="text-xs text-muted-foreground truncate">{selectedEvidence.contentType}</p>
+                    </div>
+                    <Button asChild variant="outline" size="sm" className="gap-2">
+                      <a href={previewUrl} target="_blank" rel="noreferrer">
+                        <Download className="h-4 w-4" />
+                        Open
+                      </a>
+                    </Button>
+                  </div>
+
+                  <div className="flex-1 min-h-0 p-4">
+                    {isImage ? (
+                      <img
+                        src={previewUrl}
+                        alt={selectedEvidence.filename}
+                        className="h-full w-full object-contain rounded-md bg-black/5"
+                      />
+                    ) : isPdf ? (
+                      <iframe
+                        src={previewUrl}
+                        title={selectedEvidence.filename}
+                        className="h-full w-full rounded-md bg-background"
+                      />
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center gap-3 rounded-md border border-dashed bg-background p-6">
+                        <Eye className="h-10 w-10 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Preview unavailable for this file type</p>
+                          <p className="text-sm text-muted-foreground">
+                            Use Open to view or download the attached evidence.
+                          </p>
+                        </div>
+                        <Button asChild>
+                          <a href={previewUrl} target="_blank" rel="noreferrer">
+                            Open File
+                          </a>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+                  <div className="p-4 text-xs text-muted-foreground flex items-center justify-between gap-3">
+                    <span>Uploaded evidence is stored privately in GridFS and served only through this dashboard view.</span>
+                    <span>File {(selectedEvidence.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6">
+                  No evidence selected.
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
