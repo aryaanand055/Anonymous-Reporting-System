@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
 import { generateReportSummary } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
+import { decryptPayload, type EncryptedPayload } from "@/lib/encryption";
 import {
   MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES,
   MAX_REPORT_EVIDENCE_FILES,
@@ -12,6 +13,8 @@ import {
 } from "@/lib/report-evidence";
 
 export const runtime = "nodejs";
+
+const ENCRYPTED_FIELD_NAME = "encrypted";
 
 type HardwarePayload = {
   location?: string;
@@ -64,13 +67,24 @@ async function parseHardwareSubmission(req: NextRequest) {
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await req.formData();
-    const evidenceFiles = [
-      ...formData.getAll(REPORT_EVIDENCE_FIELD_NAME),
-      ...formData.getAll(`${REPORT_EVIDENCE_FIELD_NAME}[]`),
-    ].filter(isFileEntry);
+    const encryptedField = formData.get(ENCRYPTED_FIELD_NAME);
+    let data: HardwarePayload;
 
-    return {
-      data: {
+    if (typeof encryptedField === "string") {
+      try {
+        const apiKey = req.headers.get("X-API-KEY");
+        if (!apiKey) {
+          throw new Error("API key required for decryption");
+        }
+
+        const encrypted = JSON.parse(encryptedField) as EncryptedPayload;
+        const decrypted = decryptPayload(apiKey, encrypted);
+        data = JSON.parse(decrypted) as HardwarePayload;
+      } catch (error) {
+        throw new Error(`Failed to decrypt payload: ${error instanceof Error ? error.message : "unknown error"}`);
+      }
+    } else {
+      data = {
         location: getFormValue(formData, "location"),
         district: getFormValue(formData, "district"),
         date: getFormValue(formData, "date"),
@@ -80,13 +94,42 @@ async function parseHardwareSubmission(req: NextRequest) {
         emotional_indicator: getFormValue(formData, "emotional_indicator"),
         raw_text: getFormValue(formData, "raw_text"),
         rawText: getFormValue(formData, "rawText"),
-      } satisfies HardwarePayload,
+      } satisfies HardwarePayload;
+    }
+
+    const evidenceFiles = [
+      ...formData.getAll(REPORT_EVIDENCE_FIELD_NAME),
+      ...formData.getAll(`${REPORT_EVIDENCE_FIELD_NAME}[]`),
+    ].filter(isFileEntry);
+
+    return {
+      data,
       evidenceFiles,
     };
   }
 
+  const body = await req.json();
+  const encryptedField = body.encrypted;
+
+  let data: HardwarePayload;
+
+  if (encryptedField && typeof encryptedField === "object") {
+    try {
+      const apiKey = req.headers.get("X-API-KEY");
+      if (!apiKey) {
+        throw new Error("API key required for decryption");
+      }
+
+      data = JSON.parse(decryptPayload(apiKey, encryptedField as EncryptedPayload)) as HardwarePayload;
+    } catch (error) {
+      throw new Error(`Failed to decrypt payload: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
+  } else {
+    data = body as HardwarePayload;
+  }
+
   return {
-    data: (await req.json()) as HardwarePayload,
+    data,
     evidenceFiles: [] as File[],
   };
 }
@@ -107,8 +150,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Parse Body
-    const { data, evidenceFiles } = await parseHardwareSubmission(req);
+    // 2. Parse Body (with optional decryption)
+    let data: HardwarePayload;
+    let evidenceFiles: File[];
+
+    try {
+      const result = await parseHardwareSubmission(req);
+      data = result.data;
+      evidenceFiles = result.evidenceFiles;
+    } catch (error) {
+      return NextResponse.json(
+        { error: `Invalid request: ${error instanceof Error ? error.message : "unknown error"}` },
+        { status: 400 }
+      );
+    }
 
     if (evidenceFiles.length > MAX_REPORT_EVIDENCE_FILES) {
       return NextResponse.json(
