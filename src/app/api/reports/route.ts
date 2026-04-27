@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { generateReportSummary } from "@/ai/summarize";
+import { generateReportSummary, generateSeverityFromText } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
 
 type HardwarePayload = {
@@ -15,8 +15,6 @@ type HardwarePayload = {
   raw_text?: string;
   rawText?: string;
 };
-
-const VALID_SEVERITY = new Set(["low", "medium", "high"]);
 
 function generateTrackingId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -57,9 +55,14 @@ export async function POST(req: NextRequest) {
     const reportDateLabel = data.date?.trim();
     const institutionType = data.institution_type?.trim();
     const issueType = data.issue_type?.trim();
-    const severityLevel = data.severity_level?.trim().toLowerCase();
     const emotionalIndicator = data.emotional_indicator?.trim();
     const rawText = (data.raw_text ?? data.rawText)?.trim();
+
+    if (!rawText) {
+      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
+    }
+
+    const severityLevel = await generateSeverityFromText(rawText);
 
     // 3. Simple Validation
     if (
@@ -68,17 +71,9 @@ export async function POST(req: NextRequest) {
       !reportDateLabel ||
       !institutionType ||
       !issueType ||
-      !severityLevel ||
       !emotionalIndicator
     ) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    if (!VALID_SEVERITY.has(severityLevel)) {
-      return NextResponse.json(
-        { error: "severity_level must be one of: low, medium, high" },
-        { status: 400 }
-      );
     }
 
     await dbConnect();
