@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
+import mongoose from "mongoose";
 import {
     MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES,
     MAX_REPORT_EVIDENCE_FILES,
@@ -36,8 +37,28 @@ export async function POST(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        if (!params?.reportId || !mongoose.isValidObjectId(params.reportId)) {
+            return NextResponse.json({ error: "Invalid reportId" }, { status: 400 });
+        }
+
+        const contentType = req.headers.get("content-type") || "";
+        if (!contentType.toLowerCase().includes("multipart/form-data")) {
+            return NextResponse.json(
+                { error: "Content-Type must be multipart/form-data" },
+                { status: 400 }
+            );
+        }
+
         // 2. Parse multipart form data
-        const formData = await req.formData();
+        let formData: FormData;
+        try {
+            formData = await req.formData();
+        } catch {
+            return NextResponse.json(
+                { error: "Invalid multipart/form-data body" },
+                { status: 400 }
+            );
+        }
         const submittedTrackingId = getFormValue(formData, "trackingId")?.trim().toUpperCase();
 
         if (!submittedTrackingId) {
