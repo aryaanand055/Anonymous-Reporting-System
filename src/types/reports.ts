@@ -3,6 +3,14 @@ export type Priority = "low" | "medium" | "high";
 export type ReportStatus = "pending" | "in_progress" | "resolved";
 export type SeverityLevel = "low" | "medium" | "high";
 
+export interface ReportEvidence {
+  fileId: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  uploadedAt: Date | string;
+}
+
 export interface Report {
   id: string;
   trackingId: string;
@@ -20,6 +28,7 @@ export interface Report {
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
+  evidence?: ReportEvidence[];
   createdAt: Date | string;
 }
 

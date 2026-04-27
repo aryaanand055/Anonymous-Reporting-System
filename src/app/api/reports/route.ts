@@ -3,6 +3,15 @@ import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
 import { generateReportSummary } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
+import {
+  MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES,
+  MAX_REPORT_EVIDENCE_FILES,
+  REPORT_EVIDENCE_FIELD_NAME,
+  deleteReportEvidence,
+  uploadReportEvidence,
+} from "@/lib/report-evidence";
+
+export const runtime = "nodejs";
 
 type HardwarePayload = {
   location?: string;
@@ -35,7 +44,56 @@ function inferDepartment(issueType: string) {
   return "human_rights";
 }
 
+function isFileEntry(value: FormDataEntryValue): value is File {
+  return typeof value !== "string";
+}
+
+function getFormValue(formData: FormData, ...keys: string[]) {
+  for (const key of keys) {
+    const value = formData.get(key);
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+async function parseHardwareSubmission(req: NextRequest) {
+  const contentType = req.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await req.formData();
+    const evidenceFiles = [
+      ...formData.getAll(REPORT_EVIDENCE_FIELD_NAME),
+      ...formData.getAll(`${REPORT_EVIDENCE_FIELD_NAME}[]`),
+    ].filter(isFileEntry);
+
+    return {
+      data: {
+        location: getFormValue(formData, "location"),
+        district: getFormValue(formData, "district"),
+        date: getFormValue(formData, "date"),
+        institution_type: getFormValue(formData, "institution_type"),
+        issue_type: getFormValue(formData, "issue_type"),
+        severity_level: getFormValue(formData, "severity_level"),
+        emotional_indicator: getFormValue(formData, "emotional_indicator"),
+        raw_text: getFormValue(formData, "raw_text"),
+        rawText: getFormValue(formData, "rawText"),
+      } satisfies HardwarePayload,
+      evidenceFiles,
+    };
+  }
+
+  return {
+    data: (await req.json()) as HardwarePayload,
+    evidenceFiles: [] as File[],
+  };
+}
+
 export async function POST(req: NextRequest) {
+  let uploadedEvidenceIds: string[] = [];
+
   try {
     const configuredHardwareApiKey = process.env.HARDWARE_API_KEY;
     if (!configuredHardwareApiKey) {
@@ -50,7 +108,23 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Parse Body
-    const data: HardwarePayload = await req.json();
+    const { data, evidenceFiles } = await parseHardwareSubmission(req);
+
+    if (evidenceFiles.length > MAX_REPORT_EVIDENCE_FILES) {
+      return NextResponse.json(
+        { error: `A maximum of ${MAX_REPORT_EVIDENCE_FILES} evidence files is allowed` },
+        { status: 400 }
+      );
+    }
+
+    for (const file of evidenceFiles) {
+      if (file.size > MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES) {
+        return NextResponse.json(
+          { error: `Each evidence file must be 20 MB or smaller: ${file.name || "unnamed file"}` },
+          { status: 400 }
+        );
+      }
+    }
 
     const location = data.location?.trim();
     const district = data.district?.trim();
@@ -102,6 +176,9 @@ export async function POST(req: NextRequest) {
       trackingId = generateTrackingId();
     }
 
+    const evidence = evidenceFiles.length ? await uploadReportEvidence(trackingId, evidenceFiles) : [];
+    uploadedEvidenceIds = evidence.map((item) => item.fileId);
+
     // 5. Create Report
     const report = await ReportModel.create({
       trackingId,
@@ -118,6 +195,7 @@ export async function POST(req: NextRequest) {
       priority,
       department,
       aiSummary,
+      evidence,
       status: "pending",
     });
 
@@ -137,6 +215,11 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error("API Error:", error);
+    if (uploadedEvidenceIds.length) {
+      await deleteReportEvidence(uploadedEvidenceIds).catch((cleanupError) => {
+        console.error("Failed to clean up uploaded evidence after report failure:", cleanupError);
+      });
+    }
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

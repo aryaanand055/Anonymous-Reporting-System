@@ -2,9 +2,24 @@
 
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { Report, Department, Priority, ReportStatus } from "@/types/reports";
+import { Department, Priority, Report, ReportEvidence, ReportStatus } from "@/types/reports";
 import { revalidatePath } from "next/cache";
 import { generateReportSummary } from "@/ai/summarize";
+
+function mapReportEvidence(evidence: any[] | undefined): ReportEvidence[] {
+  if (!Array.isArray(evidence)) {
+    return [];
+  }
+
+  return evidence.map((item) => ({
+    fileId: item.fileId ?? "",
+    filename: item.filename ?? "evidence",
+    contentType: item.contentType ?? "application/octet-stream",
+    size: item.size ?? 0,
+    uploadedAt:
+      item.uploadedAt instanceof Date ? item.uploadedAt.toISOString() : item.uploadedAt ?? new Date().toISOString(),
+  }));
+}
 
 function generateTrackingId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -61,6 +76,7 @@ export async function getReports(department?: Department): Promise<Report[]> {
       priority: report.priority ?? report.severityLevel ?? "medium",
       status: report.status ?? "pending",
       aiSummary: report.aiSummary,
+      evidence: mapReportEvidence(report.evidence),
       createdAt: report.createdAt instanceof Date ? report.createdAt.toISOString() : new Date().toISOString(),
     }));
   } catch (error) {
@@ -136,6 +152,7 @@ export async function getReportStatusByTrackingId(trackingId: string) {
           report.createdAt instanceof Date
             ? report.createdAt.toISOString()
             : new Date().toISOString(),
+        evidence: mapReportEvidence(report.evidence),
       },
     };
   } catch (error) {
