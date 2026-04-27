@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import mongoose from "mongoose";
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { createReportEvidenceDownloadStream } from "@/lib/report-evidence";
+import { createSecureDownloadStream } from "@/lib/report-evidence";
 
 export const runtime = "nodejs";
 
@@ -60,7 +60,7 @@ export async function GET(
             return NextResponse.json({ error: "Report evidence not found" }, { status: 404 });
         }
 
-        const downloadStream = createReportEvidenceDownloadStream(fileId);
+        const downloadStream = await createSecureDownloadStream(fileId, report.trackingId);
         const headers = new Headers({
             "Content-Type": evidenceEntry.contentType || "application/octet-stream",
             "Content-Disposition": buildContentDisposition(evidenceEntry.filename || "evidence"),
