@@ -20,6 +20,17 @@ function getFormValue(formData: FormData, key: string): string | undefined {
     return typeof value === "string" ? value : undefined;
 }
 
+function normalizeRouteReference(input: string | undefined): string {
+    const decoded = decodeURIComponent(input ?? "").trim();
+    const wrappedMatch = decoded.match(/ObjectId\(["']?([a-fA-F0-9]{24})["']?\)/);
+
+    if (wrappedMatch?.[1]) {
+        return wrappedMatch[1];
+    }
+
+    return decoded;
+}
+
 export async function POST(
     req: NextRequest,
     { params }: { params: { reportId: string } }
@@ -37,9 +48,15 @@ export async function POST(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        if (!params?.reportId || !mongoose.isValidObjectId(params.reportId)) {
+        const normalizedRouteReference = normalizeRouteReference(params?.reportId);
+        if (!normalizedRouteReference) {
             return NextResponse.json({ error: "Invalid reportId" }, { status: 400 });
         }
+
+        const referenceIsObjectId = mongoose.isValidObjectId(normalizedRouteReference);
+        const routeTrackingId = referenceIsObjectId
+            ? undefined
+            : normalizedRouteReference.toUpperCase();
 
         const contentType = req.headers.get("content-type") || "";
         if (!contentType.toLowerCase().includes("multipart/form-data")) {
@@ -59,7 +76,11 @@ export async function POST(
                 { status: 400 }
             );
         }
-        const submittedTrackingId = getFormValue(formData, "trackingId")?.trim().toUpperCase();
+        const submittedTrackingId = (
+            getFormValue(formData, "trackingId") ?? routeTrackingId
+        )
+            ?.trim()
+            .toUpperCase();
 
         if (!submittedTrackingId) {
             return NextResponse.json({ error: "trackingId is required" }, { status: 400 });
@@ -78,7 +99,9 @@ export async function POST(
         await dbConnect();
 
         // 4. Find the report by ID
-        const report = await ReportModel.findById(params.reportId);
+        const report = referenceIsObjectId
+            ? await ReportModel.findById(normalizedRouteReference)
+            : await ReportModel.findOne({ trackingId: routeTrackingId });
         if (!report) {
             return NextResponse.json({ error: "Report not found" }, { status: 404 });
         }

@@ -177,19 +177,21 @@ or
 
 ### 2. Upload Evidence to Existing Report
 
-**Endpoint**: `POST /api/reports/:reportId/evidence`
+**Endpoint**: `POST /api/reports/:reportRef/evidence`
 
 Attach additional evidence files to an already-created report. Validates ownership via tracking ID match.
 
 **URL Parameters**:
-- `reportId` (required): The MongoDB ID of the report (returned in the submission response as `id`)
+- `reportRef` (required): Either:
+  - MongoDB report ID (returned as `id` from API responses), or
+  - Tracking ID (e.g., `AR-ABC3XY7Z`) for direct attachment flows
 
 **Request Headers**:
 - `X-API-KEY`: Required for authentication
 - `Content-Type`: `multipart/form-data`
 
 **Request Body**:
-- `trackingId` (required): The tracking ID of the report (e.g., `AR-ABC3XY7Z`)
+- `trackingId` (optional when `reportRef` is a tracking ID): The tracking ID of the report (e.g., `AR-ABC3XY7Z`)
 - `evidence` (required, 1-3 files): Evidence files to attach
 
 ```bash
@@ -198,6 +200,14 @@ curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports/50
   -F "trackingId=AR-ABC3XY7Z" \
   -F "evidence=@/path/to/additional_photo.jpg" \
   -F "evidence=@/path/to/additional_document.pdf"
+```
+
+Direct via tracking ID in URL:
+
+```bash
+curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports/AR-ABC3XY7Z/evidence" \
+  -H "X-API-KEY: reporting-system12" \
+  -F "evidence=@/path/to/additional_photo.jpg"
 ```
 
 #### Evidence Constraints
