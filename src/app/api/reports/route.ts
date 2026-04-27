@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { generateReportSummary, generateSeverityFromText } from "@/ai/summarize";
+import { generateReportSummary, generateSeverityFromText, getEmbedding } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
 import { decryptPayload, type EncryptedPayload } from "@/lib/encryption";
 import {
@@ -44,6 +44,32 @@ function inferDepartment(issueType: string) {
   }
   return "human_rights";
 }
+
+function cosineSimilarity(a: number[], b: number[]) {
+  const dot = a.reduce((sum, v, i) => sum + v * b[i], 0);
+  const magA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
+  const magB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
+  return dot / (magA * magB);
+}
+
+function severityToScore(sev: "low" | "medium" | "high"): number {
+  if (sev === "high") return 3;
+  if (sev === "medium") return 2;
+  return 1;
+}
+
+function scoreToSeverity(score: number): "low" | "medium" | "high" {
+  if (score >= 3) return "high";
+  if (score === 2) return "medium";
+  return "low";
+}
+
+function calculateClusterSeverity(base: number, count: number) {
+  let score = base;
+  score += Math.log2(count + 1); // exponential growth feel
+  return Math.min(Math.round(score), 3);
+}
+
 
 function isFileEntry(value: FormDataEntryValue): value is File {
   return typeof value !== "string";
@@ -191,8 +217,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
     }
 
-    const severityLevel = await generateSeverityFromText(rawText);
-
     // 3. Simple Validation
     if (
       !location ||
@@ -206,6 +230,48 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
+
+    // 🚀 Architecture Upgrade: Incident Clustering & Vector Search
+    const newEmbedding = await getEmbedding(rawText);
+    
+    // Compare against all existing reports (no time constraint)
+    const existingReports = await ReportModel.find({}).lean();
+
+    let matchedIncidentId = null;
+    let maxSim = 0;
+
+    for (const r of existingReports) {
+      if (!r.embedding || r.embedding.length === 0) continue;
+      const sim = cosineSimilarity(newEmbedding, r.embedding);
+      if (sim > 0.85 && sim > maxSim) {
+        maxSim = sim;
+        matchedIncidentId = r.incidentId;
+      }
+    }
+
+    const incidentId = matchedIncidentId || `INC-${Date.now()}`;
+
+    // Base Severity
+    const baseSeverity = await generateSeverityFromText(rawText);
+    const baseScore = severityToScore(baseSeverity);
+
+    const incidentReports = await ReportModel.find({ incidentId });
+    const count = incidentReports.length;
+
+    const finalScore = calculateClusterSeverity(baseScore, count);
+    const severityLevel = scoreToSeverity(finalScore);
+
+    // Spike Detection
+    const last10Min = new Date(Date.now() - 1000 * 60 * 10);
+    const recentCount = await ReportModel.countDocuments({
+      incidentId,
+      createdAt: { $gte: last10Min },
+    });
+
+    if (recentCount >= 5) {
+      console.log(`🚨 INCIDENT SPIKE DETECTED for Incident ID: ${incidentId}`);
+      // send alert to dashboard / authorities
+    }
 
     const department = inferDepartment(issueType);
     const priority = severityLevel;
@@ -245,6 +311,8 @@ export async function POST(req: NextRequest) {
       priority,
       department,
       aiSummary,
+      incidentId,
+      embedding: newEmbedding,
       evidence,
       status: "pending",
     });

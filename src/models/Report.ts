@@ -17,6 +17,8 @@ export interface IReport extends Document {
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
+  incidentId?: string;
+  embedding?: number[];
   evidence?: ReportEvidence[];
   createdAt: Date;
 }
@@ -49,6 +51,8 @@ const ReportSchema: Schema = new Schema(
     priority: { type: String, enum: ["low", "medium", "high"], required: true },
     status: { type: String, enum: ["pending", "in_progress", "resolved"], default: "pending" },
     aiSummary: { type: String },
+    incidentId: { type: String, index: true },
+    embedding: { type: [Number] },
     evidence: { type: [ReportEvidenceSchema], default: [] },
   },
   { timestamps: true }

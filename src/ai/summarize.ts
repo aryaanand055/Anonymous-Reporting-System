@@ -41,3 +41,30 @@ Respond with ONLY one word: low, medium, or high.
 
   return "medium"; // fallback
 }
+
+export async function getEmbedding(text: string): Promise<number[]> {
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY;
+  if (!apiKey) return [];
+  
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "models/text-embedding-004",
+        content: { parts: [{ text }] }
+      })
+    });
+    
+    if (!res.ok) {
+        throw new Error(`Embedding failed: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data.embedding?.values || [];
+  } catch (error) {
+    console.error("Vector generation failed:", error);
+    return [];
+  }
+}
+
