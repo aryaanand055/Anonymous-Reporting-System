@@ -48,7 +48,9 @@ export default function SubmitReportPage() {
               <ul className="text-sm text-muted-foreground space-y-2 list-disc pl-5">
                 <li>POST to /api/reports</li>
                 <li>Header X-API-KEY must match HARDWARE_API_KEY</li>
-                <li>JSON body must include required structured fields</li>
+                <li>JSON bodies remain supported for text-only submissions</li>
+                <li>Multipart form data can include up to 3 evidence files under the evidence field</li>
+                <li>Each evidence file must be 20 MB or smaller and can be any file type</li>
                 <li>Optional raw_text is stored for manager review</li>
               </ul>
             </div>

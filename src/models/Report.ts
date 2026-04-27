@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { Department, Priority, ReportStatus } from "@/types/reports";
+import { Department, Priority, ReportEvidence, ReportStatus } from "@/types/reports";
 
 export interface IReport extends Document {
   trackingId: string;
@@ -17,8 +17,20 @@ export interface IReport extends Document {
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
+  evidence?: ReportEvidence[];
   createdAt: Date;
 }
+
+const ReportEvidenceSchema = new Schema(
+  {
+    fileId: { type: String, required: true },
+    filename: { type: String, required: true },
+    contentType: { type: String, required: true },
+    size: { type: Number, required: true },
+    uploadedAt: { type: Date, required: true },
+  },
+  { _id: false }
+);
 
 const ReportSchema: Schema = new Schema(
   {
@@ -37,6 +49,7 @@ const ReportSchema: Schema = new Schema(
     priority: { type: String, enum: ["low", "medium", "high"], required: true },
     status: { type: String, enum: ["pending", "in_progress", "resolved"], default: "pending" },
     aiSummary: { type: String },
+    evidence: { type: [ReportEvidenceSchema], default: [] },
   },
   { timestamps: true }
 );
