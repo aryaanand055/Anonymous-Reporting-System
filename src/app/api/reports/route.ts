@@ -28,6 +28,26 @@ type HardwarePayload = {
   rawText?: string;
 };
 
+type SeverityValue = "low" | "medium" | "high";
+
+function normalizeText(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+}
+
+function normalizeSeverity(value: unknown): SeverityValue | undefined {
+  const normalized = normalizeText(value)?.toLowerCase();
+  if (normalized === "low" || normalized === "medium" || normalized === "high") {
+    return normalized;
+  }
+
+  return undefined;
+}
+
 function generateTrackingId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let suffix = "";
@@ -132,8 +152,15 @@ async function parseHardwareSubmission(req: NextRequest) {
     };
   }
 
-  const body = await req.json();
-  const encryptedField = body.encrypted;
+  let body: unknown = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
+  const safeBody = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const encryptedField = safeBody.encrypted;
 
   let data: HardwarePayload;
 
@@ -149,7 +176,7 @@ async function parseHardwareSubmission(req: NextRequest) {
       throw new Error(`Failed to decrypt payload: ${error instanceof Error ? error.message : "unknown error"}`);
     }
   } else {
-    data = body as HardwarePayload;
+    data = safeBody as HardwarePayload;
   }
 
   return {
@@ -205,35 +232,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const location = data.location?.trim();
-    const district = data.district?.trim();
-    const reportDateLabel = data.date?.trim();
-    const institutionType = data.institution_type?.trim();
-    const issueType = data.issue_type?.trim();
-    const emotionalIndicator = data.emotional_indicator?.trim();
-    const rawText = (data.raw_text ?? data.rawText)?.trim();
-
-    if (!rawText) {
-      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
-    }
-
-    // 3. Simple Validation
-    if (
-      !location ||
-      !district ||
-      !reportDateLabel ||
-      !institutionType ||
-      !issueType ||
-      !emotionalIndicator
-    ) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
+    const location = normalizeText(data.location) ?? "Unknown location";
+    const district = normalizeText(data.district) ?? "Unknown district";
+    const reportDateLabel =
+      normalizeText(data.date) ??
+      new Date().toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    const institutionType = normalizeText(data.institution_type) ?? "Unspecified institution";
+    const issueType = normalizeText(data.issue_type) ?? "Unspecified issue";
+    const emotionalIndicator = normalizeText(data.emotional_indicator) ?? "unspecified";
+    const rawText = normalizeText(data.raw_text ?? data.rawText);
+    const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
 
     await dbConnect();
 
     // 🚀 Architecture Upgrade: Incident Clustering & Vector Search
-    const newEmbedding = await getEmbedding(rawText);
-    
+    const newEmbedding = await getEmbedding(narrativeText);
+
     // Compare against all existing reports (no time constraint)
     const existingReports = await ReportModel.find({}).lean();
 
@@ -252,7 +270,7 @@ export async function POST(req: NextRequest) {
     const incidentId = matchedIncidentId || `INC-${Date.now()}`;
 
     // Base Severity
-    const baseSeverity = await generateSeverityFromText(rawText);
+    const baseSeverity = normalizeSeverity(data.severity_level) ?? (await generateSeverityFromText(narrativeText));
     const baseScore = severityToScore(baseSeverity);
 
     const incidentReports = await ReportModel.find({ incidentId });
@@ -276,7 +294,7 @@ export async function POST(req: NextRequest) {
     const department = inferDepartment(issueType);
     const priority = severityLevel;
     const title = `${issueType} at ${institutionType}`;
-    const description = rawText || `${issueType} reported at ${institutionType} in ${location}.`;
+    const description = narrativeText;
 
     // 4. Generate AI Summary (reusing logic from server action)
     const aiSummary = await generateReportSummary(description);
@@ -307,7 +325,7 @@ export async function POST(req: NextRequest) {
       issueType,
       severityLevel,
       emotionalIndicator,
-      rawText,
+      rawText: rawText ?? description,
       priority,
       department,
       aiSummary,
