@@ -175,7 +175,119 @@ or
 
 ---
 
-### 2. Check Report Status
+### 2. Upload Evidence to Existing Report
+
+**Endpoint**: `POST /api/reports/:reportRef/evidence`
+
+Attach additional evidence files to an already-created report. Validates ownership via tracking ID match.
+
+**URL Parameters**:
+- `reportRef` (required): Either:
+  - MongoDB report ID (returned as `id` from API responses), or
+  - Tracking ID (e.g., `AR-ABC3XY7Z`) for direct attachment flows
+
+**Request Headers**:
+- `X-API-KEY`: Required for authentication
+- `Content-Type`: `multipart/form-data`
+
+**Request Body**:
+- `trackingId` (optional when `reportRef` is a tracking ID): The tracking ID of the report (e.g., `AR-ABC3XY7Z`)
+- `evidence` (required, 1-3 files): Evidence files to attach
+
+```bash
+curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports/507f1f77bcf86cd799439011/evidence" \
+  -H "X-API-KEY: reporting-system12" \
+  -F "trackingId=AR-ABC3XY7Z" \
+  -F "evidence=@/path/to/additional_photo.jpg" \
+  -F "evidence=@/path/to/additional_document.pdf"
+```
+
+Direct via tracking ID in URL:
+
+```bash
+curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports/AR-ABC3XY7Z/evidence" \
+  -H "X-API-KEY: reporting-system12" \
+  -F "evidence=@/path/to/additional_photo.jpg"
+```
+
+#### Evidence Constraints
+
+- Minimum **1 file** per request
+- Total evidence files per report: maximum **3 files**
+- Each file must be **20 MB or smaller**
+- File type is unrestricted
+
+#### Response: Success (200)
+
+```json
+{
+  "success": true,
+  "message": "Evidence attached successfully",
+  "filesAdded": 2
+}
+```
+
+#### Response: Validation Errors (400)
+
+Missing tracking ID:
+
+```json
+{
+  "error": "trackingId is required"
+}
+```
+
+No evidence files provided:
+
+```json
+{
+  "error": "At least one evidence file is required"
+}
+```
+
+Exceeds file limit:
+
+```json
+{
+  "error": "Total evidence files cannot exceed 3. Current: 2, attempting to add: 2"
+}
+```
+
+File too large:
+
+```json
+{
+  "error": "Each evidence file must be 20 MB or smaller: large_video.mp4"
+}
+```
+
+#### Response: Ownership Mismatch (403)
+
+```json
+{
+  "error": "Tracking ID does not match report"
+}
+```
+
+#### Response: Not Found (404)
+
+```json
+{
+  "error": "Report not found"
+}
+```
+
+#### Response: Unauthorized (401)
+
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+---
+
+### 3. Check Report Status
 
 **Endpoint**: `GET /api/reports`
 
@@ -220,7 +332,7 @@ curl -X GET "https://anonymous-reporting-system-eight.vercel.app/api/reports?tra
 
 ---
 
-### 3. Download Evidence File
+### 4. Download Evidence File
 
 **Endpoint**: `GET /api/reports/download`
 
@@ -392,6 +504,24 @@ No explicit rate limiting is currently enforced. However, best practices suggest
        "location": "Mumbai",
        "createdAt": "2026-04-18T14:22:00.000Z"
      }
+   }
+   ```
+
+2. **Attach Additional Evidence**:
+   ```bash
+   curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports/507f1f77bcf86cd799439011/evidence" \
+     -H "X-API-KEY: reporting-system12" \
+     -F "trackingId=AR-XYZ1ABC2" \
+     -F "evidence=@follow_up_photo.jpg" \
+     -F "evidence=@lab_report.pdf"
+   ```
+
+   **Response**:
+   ```json
+   {
+     "success": true,
+     "message": "Evidence attached successfully",
+     "filesAdded": 2
    }
    ```
 
