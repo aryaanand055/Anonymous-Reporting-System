@@ -257,12 +257,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const rawText = normalizeText(data.raw_text ?? data.rawText);
-
-    if (!rawText) {
-      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
-    }
-
     const rawText = normalizeText(data.rawText ?? data.raw_text);
 
     // AI Extraction for missing fields (Hardware only sends rawText now)
