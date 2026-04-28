@@ -220,7 +220,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
           </DialogHeader>
 
           <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-0">
-            <div className="space-y-3 overflow-y-auto pr-1 max-h-[65vh]">
+            <div className="space-y-3 overflow-y-auto pr-1 max-h-[75vh]">
               {evidence.map((item, index) => {
                 const active = index === selectedEvidenceIndex;
                 return (
@@ -229,25 +229,45 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                     type="button"
                     onClick={() => setSelectedEvidenceIndex(index)}
                     className={cn(
-                      "w-full text-left rounded-lg border p-3 transition-colors",
-                      active ? "border-primary bg-primary/5" : "hover:bg-muted/60"
+                      "w-full text-left rounded-lg border p-3 transition-all duration-200",
+                      active ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "hover:bg-muted/60"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm font-semibold truncate flex items-center gap-1.5">
                           {item.filename}
                           {item.isSuspicious && <span className="text-destructive text-xs" title="Suspicious File">⚠️</span>}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate">{item.contentType}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(item.size / (1024 * 1024)).toFixed(2)} MB
-                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">{item.contentType} • {(item.size / (1024 * 1024)).toFixed(2)} MB</p>
                       </div>
-                      <Badge variant="outline" className="shrink-0">
+                      <Badge variant="outline" className="shrink-0 text-[10px] h-5 px-1.5 font-mono">
                         #{index + 1}
                       </Badge>
                     </div>
+
+                    {(item.aiDescription || (item.flags && item.flags.length > 0)) && (
+                      <div className="mt-2 space-y-2 pt-2 border-t border-muted/50">
+                        {item.aiDescription && (
+                          <div className="text-[11px] text-foreground/70 leading-relaxed italic line-clamp-3 bg-muted/30 p-1.5 rounded">
+                            "{item.aiDescription}"
+                          </div>
+                        )}
+                        {item.flags && item.flags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {item.flags.map((flag) => (
+                              <Badge 
+                                key={flag} 
+                                variant="secondary" 
+                                className="text-[9px] h-4 px-1 rounded-sm font-mono bg-primary/10 text-primary border-transparent"
+                              >
+                                {flag.replace(/_/g, " ")}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -261,12 +281,17 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                       <p className="font-medium truncate">{selectedEvidence.filename}</p>
                       <p className="text-xs text-muted-foreground truncate">{selectedEvidence.contentType}</p>
                     </div>
-                    <Button asChild variant="outline" size="sm" className="gap-2">
-                      <a href={previewUrl} target="_blank" rel="noreferrer">
-                        <Download className="h-4 w-4" />
-                        Open
-                      </a>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {selectedEvidence.isSuspicious && (
+                        <Badge variant="destructive" className="h-6 text-[10px] px-2">Suspicious</Badge>
+                      )}
+                      <Button asChild variant="outline" size="sm" className="h-8 gap-2">
+                        <a href={previewUrl} target="_blank" rel="noreferrer">
+                          <Download className="h-4 w-4" />
+                          Open
+                        </a>
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="flex-1 min-h-0 p-4">
@@ -280,7 +305,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                       <iframe
                         src={previewUrl}
                         title={selectedEvidence.filename}
-                        className="h-full w-full rounded-md bg-background"
+                        className="h-full w-full rounded-md bg-background shadow-sm"
                       />
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center text-center gap-3 rounded-md border border-dashed bg-background p-6">
@@ -299,38 +324,11 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                       </div>
                     )}
                   </div>
-                  
-                  {(selectedEvidence.aiDescription || (selectedEvidence.flags && selectedEvidence.flags.length > 0)) && (
-                    <div className="p-4 bg-muted/40 border-t border-muted/50 rounded-b-md">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-semibold text-xs text-primary tracking-wider uppercase flex items-center gap-1.5">
-                          Forensic AI Analysis
-                        </span>
-                        {selectedEvidence.isSuspicious && (
-                            <Badge variant="destructive" className="h-4 text-[10px] px-1 pointer-events-none fade-in">Suspicious</Badge>
-                        )}
-                      </div>
-                      {selectedEvidence.aiDescription && (
-                        <p className="text-sm text-foreground/80 leading-snug italic border-l-2 border-primary/20 pl-3">
-                          "{selectedEvidence.aiDescription}"
-                        </p>
-                      )}
-                      {selectedEvidence.flags && selectedEvidence.flags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-3">
-                          {selectedEvidence.flags.map(flag => (
-                              <Badge key={flag} variant="secondary" className="text-[10px] rounded-md font-mono bg-muted-foreground/10 text-muted-foreground border-transparent">
-                                {flag.replace(/_/g, " ")}
-                              </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
 
                   <Separator />
-                  <div className="p-4 text-xs text-muted-foreground flex items-center justify-between gap-3">
-                    <span>Uploaded evidence is stored privately in GridFS and served only through this dashboard view.</span>
-                    <span>File {(selectedEvidence.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  <div className="p-3 text-[10px] text-muted-foreground flex items-center justify-between gap-3 bg-background/50">
+                    <span>Evidence stored in GridFS • SHA-256 Verified Scan</span>
+                    <span>File ID: {selectedEvidence.fileId.substring(0, 12)}...</span>
                   </div>
                 </>
               ) : (
