@@ -303,8 +303,8 @@ export async function POST(req: NextRequest) {
     });
 
     const fullTextForSeverity = combinedDescriptions 
-        ? `${rawText}\n\nVisual Evidence Descriptions: ${combinedDescriptions.trim()}` 
-        : rawText;
+        ? `${rawText ?? ""}\n\nVisual Evidence Descriptions: ${combinedDescriptions.trim()}` 
+        : (rawText ?? description);
 
     // Base Severity (now incorporates Visual Evidence Descriptions)
     const baseSeverity = await generateSeverityFromText(fullTextForSeverity);
