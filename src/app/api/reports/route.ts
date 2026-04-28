@@ -257,6 +257,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const rawText = normalizeText(data.raw_text ?? data.rawText);
+
+    if (!rawText) {
+      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
+    }
+
     const rawText = normalizeText(data.rawText ?? data.raw_text);
 
     // AI Extraction for missing fields (Hardware only sends rawText now)
@@ -359,7 +365,7 @@ export async function POST(req: NextRequest) {
       description,
       location,
       issueType,
-      rawText: rawText ?? description,
+      rawText,
       institutionType,
       severityLevel,
     });
@@ -386,7 +392,7 @@ export async function POST(req: NextRequest) {
       issueType,
       severityLevel,
       emotionalIndicator,
-      rawText: rawText ?? description,
+      rawText,
       priority,
       department,
       departments,
@@ -405,7 +411,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Report received successfully",
-      id: report._id.toString(),
       trackingId: report.trackingId,
     });
 
