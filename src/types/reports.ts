@@ -1,4 +1,14 @@
-export type Department = "human_rights" | "fire";
+export const DEPARTMENT_VALUES = [
+  "human_rights",
+  "fire",
+  "police_security",
+  "health_safety",
+  "education",
+  "sanitation",
+  "transport_infrastructure",
+] as const;
+
+export type Department = (typeof DEPARTMENT_VALUES)[number];
 export type Priority = "low" | "medium" | "high";
 export type ReportStatus = "pending" | "in_progress" | "resolved";
 export type SeverityLevel = "low" | "medium" | "high";
@@ -25,6 +35,7 @@ export interface Report {
   emotionalIndicator: string;
   rawText?: string;
   department: Department;
+  departments?: Department[];
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
@@ -35,6 +46,11 @@ export interface Report {
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   human_rights: "Human Rights",
   fire: "Fire Department",
+  police_security: "Police & Security",
+  health_safety: "Health & Safety",
+  education: "Education",
+  sanitation: "Sanitation",
+  transport_infrastructure: "Transport & Infrastructure",
 };
 
 export const PRIORITY_LABELS: Record<Priority, string> = {

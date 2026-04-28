@@ -4,6 +4,7 @@ import ReportModel from "@/models/Report";
 import { generateReportSummary, generateSeverityFromText, getEmbedding } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
 import { decryptPayload, type EncryptedPayload } from "@/lib/encryption";
+import { analyzeReportDepartments } from "@/lib/report-routing";
 import {
   MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES,
   MAX_REPORT_EVIDENCE_FILES,
@@ -57,12 +58,10 @@ function generateTrackingId() {
   return `AR-${suffix}`;
 }
 
-function inferDepartment(issueType: string) {
-  const normalized = issueType.toLowerCase();
-  if (/(fire|smoke|burn|explosion|electrical)/.test(normalized)) {
-    return "fire";
+function revalidateDepartmentPaths(departments: string[]) {
+  for (const department of departments) {
+    revalidatePath(`/dashboard/${department.replace("_", "-")}`);
   }
-  return "human_rights";
 }
 
 function cosineSimilarity(a: number[], b: number[]) {
@@ -257,6 +256,8 @@ export async function POST(req: NextRequest) {
     const emotionalIndicator = normalizeText(data.emotional_indicator) ?? "unspecified";
     const rawText = normalizeText(data.raw_text ?? data.rawText);
     const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
+    const title = `${issueType} at ${institutionType}`;
+    const description = narrativeText;
 
     await dbConnect();
 
@@ -321,17 +322,25 @@ export async function POST(req: NextRequest) {
       // send alert to dashboard / authorities
     }
 
-    const department = inferDepartment(issueType);
+    const routing = await analyzeReportDepartments({
+      title,
+      description,
+      location,
+      issueType,
+      rawText: rawText ?? description,
+      institutionType,
+      severityLevel,
+    });
+    const department = routing.primaryDepartment;
+    const departments = routing.departments;
     const priority = severityLevel;
-    const title = `${issueType} at ${institutionType}`;
-    const description = narrativeText;
 
     // 4. Generate AI Summary (reusing logic from server action)
     const aiSummary = await generateReportSummary(description);
 
 
 
-    
+
 
     // 5. Create Report
     const report = await ReportModel.create({
@@ -348,6 +357,7 @@ export async function POST(req: NextRequest) {
       rawText: rawText ?? description,
       priority,
       department,
+      departments,
       aiSummary,
       incidentId,
       embedding: newEmbedding,
@@ -358,9 +368,7 @@ export async function POST(req: NextRequest) {
     // 6. Revalidate caches for the dashboard
     revalidatePath("/");
     revalidatePath("/dashboard/admin");
-    if (department) {
-      revalidatePath(`/dashboard/${department.replace("_", "-")}`);
-    }
+    revalidateDepartmentPaths(departments);
 
     return NextResponse.json({
       success: true,
@@ -400,6 +408,8 @@ export async function GET(req: NextRequest) {
         status: report.status,
         issueType: report.issueType ?? report.title ?? "Unspecified issue",
         location: report.location ?? "Unknown location",
+        department: report.department,
+        departments: Array.isArray(report.departments) ? report.departments : [report.department],
         createdAt:
           report.createdAt instanceof Date
             ? report.createdAt.toISOString()

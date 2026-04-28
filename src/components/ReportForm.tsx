@@ -32,7 +32,6 @@ const formSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   location: z.string().min(3, "Location is required"),
-  department: z.enum(["human_rights", "fire"]),
   priority: z.enum(["low", "medium", "high"]),
 });
 
@@ -47,7 +46,6 @@ export function ReportForm() {
       title: "",
       description: "",
       location: "",
-      department: "human_rights",
       priority: "low",
     },
   });
@@ -106,28 +104,6 @@ export function ReportForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="human_rights">Human Rights</SelectItem>
-                        <SelectItem value="fire">Fire Department</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="priority"
                 render={({ field }) => (
                   <FormItem>
@@ -148,6 +124,10 @@ export function ReportForm() {
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Department routing is handled automatically by the incident analysis engine.
             </div>
 
             <FormField

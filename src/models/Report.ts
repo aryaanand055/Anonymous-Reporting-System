@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { Department, Priority, ReportEvidence, ReportStatus } from "@/types/reports";
+import { DEPARTMENT_VALUES, Department, Priority, ReportEvidence, ReportStatus } from "@/types/reports";
 
 export interface IReport extends Document {
   trackingId: string;
@@ -14,6 +14,7 @@ export interface IReport extends Document {
   emotionalIndicator: string;
   rawText?: string;
   department: Department;
+  departments?: Department[];
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
@@ -47,7 +48,8 @@ const ReportSchema: Schema = new Schema(
     severityLevel: { type: String, enum: ["low", "medium", "high"], required: true },
     emotionalIndicator: { type: String, required: true },
     rawText: { type: String },
-    department: { type: String, enum: ["human_rights", "fire"], required: true },
+    department: { type: String, enum: DEPARTMENT_VALUES, required: true },
+    departments: { type: [String], enum: DEPARTMENT_VALUES, default: [] },
     priority: { type: String, enum: ["low", "medium", "high"], required: true },
     status: { type: String, enum: ["pending", "in_progress", "resolved"], default: "pending" },
     aiSummary: { type: String },

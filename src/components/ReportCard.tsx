@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { DEPARTMENT_DIRECTORY } from "@/lib/report-routing";
 
 interface ReportCardProps {
   report: Report;
@@ -65,6 +66,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
   };
 
   const evidence = report.evidence ?? [];
+  const assignedDepartments = report.departments?.length ? report.departments : [report.department];
   const selectedEvidence = useMemo(() => evidence[selectedEvidenceIndex], [evidence, selectedEvidenceIndex]);
   const previewUrl = selectedEvidence
     ? `/api/admin/reports/${encodeURIComponent(report.trackingId)}/evidence/${encodeURIComponent(selectedEvidence.fileId)}`
@@ -113,12 +115,14 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                 <DropdownMenuItem onClick={() => updateRouting({ priority: "low" })}>Set Low</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Department</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => updateRouting({ department: "human_rights" })}>
-                  Move to Human Rights
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateRouting({ department: "fire" })}>
-                  Move to Fire Department
-                </DropdownMenuItem>
+                {DEPARTMENT_DIRECTORY.map((department) => (
+                  <DropdownMenuItem
+                    key={department.department}
+                    onClick={() => updateRouting({ department: department.department })}
+                  >
+                    Move to {department.title}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -132,6 +136,14 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
         <div className="inline-flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
           Tracking ID
           <span className="font-mono text-foreground">{report.trackingId}</span>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {assignedDepartments.map((department) => (
+            <Badge key={department} variant="outline" className="capitalize text-[11px]">
+              {DEPARTMENT_LABELS[department]}
+            </Badge>
+          ))}
         </div>
 
         {report.aiSummary && (
