@@ -83,47 +83,35 @@ Accepts incident reports in two formats: JSON (text-only) or multipart form data
 ```
 
 **Required Fields**:
+- `rawText` or `raw_text` (string): The description of the incident. **If only this field is provided, the AI will automatically extract location, district, institution, and issue type.**
+
+**Optional Fields (Overridden by AI if not provided)**:
 - `location` (string): Physical location where the incident occurred
 - `district` (string): District or region identifier
-- `date` (string): Date label (e.g., "April 18, 2026")
-- `institution_type` (string): Type of institution (e.g., "government hospital", "school")
-- `issue_type` (string): Category of the issue (e.g., "sanitation and cleanliness", "fire safety")
-- `severity_level` (string): One of `low`, `medium`, `high`
-- `emotional_indicator` (string): Emotional context (e.g., "frustration", "concern", "anger")
+- `reportDateLabel` (string): Date label (e.g., "April 18, 2026")
+- `institutionType` (string): Type of institution (e.g., "hospital", "school")
+- `issueType` (string): Category of the issue (e.g., "sanitation", "corruption")
+- `severityLevel` (string): One of `low`, `medium`, `high`. (AI will classify if not provided).
+- `emotionalIndicator` (string): Emotional context.
 
-**Optional Fields**:
-- `raw_text` or `rawText` (string): Additional freeform description
+#### AI-Assisted Ingestion (Simplified Flow)
 
-#### Request Format: Multipart Form Data (With Evidence)
+For hardware devices with limited processing power, you can send **only the raw text transcript**. The server will use AI (Groq/Gemini) to reconstruct the structured fields.
 
-**Content-Type**: `multipart/form-data`
-
-**Encrypted (Default)** - Send encrypted form fields plus evidence files:
+**Example Simplified Request**:
 
 ```bash
 curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports" \
   -H "X-API-KEY: reporting-system12" \
-  -F 'encrypted={"iv":"base64-iv","data":"base64-data","tag":"base64-tag"}' \
-  -F "evidence=@/path/to/photo.jpg" \
-  -F "evidence=@/path/to/audio.wav"
+  -F "rawText=I'm at the Government Hospital in Chennai, specifically in Ward B. The sanitation is terrible here, there is overflowing trash everywhere." \
+  -F "evidence=@/path/to/photo.jpg"
 ```
 
-**Unencrypted (for development only)** - Send form fields directly:
-
-```bash
-curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports" \
-  -H "X-API-KEY: reporting-system12" \
-  -F "location=Chennai" \
-  -F "district=Tinaka" \
-  -F "reportDateLabel=April 18, 2026" \
-  -F "institutionType=government hospital" \
-  -F "issueType=sanitation and cleanliness" \
-  -F "severityLevel=high" \
-  -F "emotionalIndicator=frustration" \
-  -F "rawText=Ward B has overflowing bins." \
-  -F "evidence=@/path/to/photo.jpg" \
-  -F "evidence=@/path/to/audio.wav"
-```
+**AI Resulting Metadata**:
+- `location`: "Ward B"
+- `district`: "Chennai"
+- `institutionType`: "Government Hospital"
+- `issueType`: "Sanitation"
 
 **Evidence Constraints**:
 - Maximum **3 files** per report

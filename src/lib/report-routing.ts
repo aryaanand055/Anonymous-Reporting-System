@@ -1,7 +1,7 @@
 import { ai } from "@/ai/genkit";
 import { DEPARTMENT_DIRECTORY, DEPARTMENT_VALUES, Department } from "@/types/reports";
 
-const ROUTING_MODEL = "googleai/gemini-1.5-flash";
+const ROUTING_MODEL = "googleai/gemini-2.0-flash";
 
 function extractJsonObject(text: string) {
     const fencedMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
@@ -64,9 +64,8 @@ export async function analyzeReportDepartments(input: {
     }).join("\n");
 
     try {
-        const response = await ai.generate({
-            model: ROUTING_MODEL,
-            prompt: `You are routing an anonymous incident report to the appropriate departments.
+        const groqApiKey = process.env.GROQ_API_KEY;
+        const promptText = `You are routing an anonymous incident report to the appropriate departments.
 Do not rely on keyword matching alone. Infer the correct departments from the overall meaning, context, and likely responsibility.
 
 Allowed departments:
@@ -87,7 +86,52 @@ Rules:
 - If the report is sparse, still infer the best match from the available context.
 
 Report context:
-${context}`,
+${context}`;
+
+        if (groqApiKey) {
+            try {
+                const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${groqApiKey}`,
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [{ role: "user", content: promptText }],
+                        temperature: 0.1,
+                        response_format: { type: "json_object" },
+                    }),
+                });
+
+                if (groqRes.ok) {
+                    const groqData = await groqRes.json();
+                    const rawText = groqData.choices[0]?.message?.content ?? "";
+                    console.log(`[Groq Routing] Raw response:`, rawText);
+                    const parsed = JSON.parse(rawText);
+                    
+                    const departments = dedupeDepartments(
+                        Array.isArray(parsed.departments)
+                            ? parsed.departments.map(normalizeDepartment).filter(Boolean) as Department[]
+                            : []
+                    );
+                    const primaryDepartment = normalizeDepartment(parsed.primaryDepartment) ?? departments[0] ?? "human_rights";
+                    const finalDepartments = dedupeDepartments([primaryDepartment, ...departments]);
+
+                    return {
+                        primaryDepartment,
+                        departments: finalDepartments.length ? finalDepartments : [primaryDepartment],
+                        reasoning: parsed.reasoning,
+                    };
+                }
+            } catch (err) {
+                console.error("Groq routing failed, falling back to Gemini:", err);
+            }
+        }
+
+        const response = await ai.generate({
+            model: ROUTING_MODEL,
+            prompt: promptText,
         });
 
         const parsedText = extractJsonObject(response.text.trim());
