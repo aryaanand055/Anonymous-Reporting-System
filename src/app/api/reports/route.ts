@@ -90,6 +90,17 @@ function calculateClusterSeverity(base: number, count: number) {
   return Math.min(Math.round(score), 3);
 }
 
+function adjustSeverityForEvidence(score: number, flags: string[]) {
+  if (flags.includes("deepfake") || flags.includes("ai_generated")) {
+    return Math.max(score - 1, 1); // reduce severity
+  }
+
+  if (flags.length === 0) {
+    return Math.min(score + 1, 3); // trusted evidence boost
+  }
+
+  return score;
+}
 
 function isFileEntry(value: FormDataEntryValue): value is File {
   return typeof value !== "string";
@@ -276,8 +287,27 @@ export async function POST(req: NextRequest) {
     const incidentReports = await ReportModel.find({ incidentId });
     const count = incidentReports.length;
 
+    let trackingId = generateTrackingId();
+    for (let attempts = 0; attempts < 5; attempts += 1) {
+      const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
+      if (!existing) {
+        break;
+      }
+      trackingId = generateTrackingId();
+    }
+
+    const evidence = evidenceFiles.length ? await uploadReportEvidence(trackingId, incidentId, evidenceFiles) : [];
+    uploadedEvidenceIds = evidence.map((item) => item.fileId);
+
+    // AI Evidence Adjustments
+    let evidenceFlags: string[] = [];
+    evidence.forEach(e => {
+      if (e.flags) evidenceFlags.push(...e.flags);
+    });
+
     const finalScore = calculateClusterSeverity(baseScore, count);
-    const severityLevel = scoreToSeverity(finalScore);
+    const adjustedScore = adjustSeverityForEvidence(finalScore, evidenceFlags);
+    const severityLevel = scoreToSeverity(adjustedScore);
 
     // Spike Detection
     const last10Min = new Date(Date.now() - 1000 * 60 * 10);
@@ -301,17 +331,7 @@ export async function POST(req: NextRequest) {
 
 
 
-    let trackingId = generateTrackingId();
-    for (let attempts = 0; attempts < 5; attempts += 1) {
-      const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
-      if (!existing) {
-        break;
-      }
-      trackingId = generateTrackingId();
-    }
-
-    const evidence = evidenceFiles.length ? await uploadReportEvidence(trackingId, evidenceFiles) : [];
-    uploadedEvidenceIds = evidence.map((item) => item.fileId);
+    
 
     // 5. Create Report
     const report = await ReportModel.create({
