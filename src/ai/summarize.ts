@@ -15,18 +15,47 @@ export async function generateReportSummary(description: string) {
 
 export async function generateSeverityFromText(text: string): Promise<"low" | "medium" | "high"> {
   const prompt = `
-Classify the severity of the following incident into ONLY one of:
-low, medium, high.
+Classify the severity of the following incident report into ONLY one of: low, medium, or high.
 
-Rules:
-- high = immediate danger, violence, fire, abuse, life-threatening
-- medium = serious issue but not life-threatening
-- low = minor issue, complaint, inconvenience
+Classification Criteria:
+- HIGH: Immediate threat to life, active violence, major fire, severe physical abuse, ongoing crime in progress, or large-scale public safety emergency. (e.g., "Armed robbery in progress", "Building on fire", "Severe assault").
+- MEDIUM: Serious incidents that require investigation but are not immediately life-threatening. Property damage, non-violent harassment, significant theft, health hazards that are not immediate emergencies. (e.g., "Burglary that happened overnight", "Vandalism", "Persistent workplace harassment", "Illegal dumping of hazardous waste").
+- LOW: Minor issues, administrative complaints, general feedback, non-urgent quality of life issues, or reports that are VAGUE, INCOMPLETE, or have "UNSPECIFIED" details. (e.g., "Littering in a park", "Noise complaint", "Unspecified issue at government building", "No description provided").
 
-Text: "${text}"
+Text to analyze: "${text}"
 
 Respond with ONLY one word: low, medium, or high.
 `;
+
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (groqApiKey) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${groqApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+          max_tokens: 10,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const output = data.choices[0]?.message?.content?.trim().toLowerCase();
+        if (["low", "medium", "high"].includes(output)) {
+          console.log(`[Groq Severity] Output: ${output}`);
+          return output as "low" | "medium" | "high";
+        }
+      }
+    } catch (error) {
+      console.error("Groq severity failed, falling back to Gemini:", error);
+    }
+  }
 
   try {
     const response = await ai.generate({ prompt });

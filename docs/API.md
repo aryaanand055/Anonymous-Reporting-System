@@ -115,12 +115,12 @@ curl -X POST "https://anonymous-reporting-system-eight.vercel.app/api/reports" \
   -H "X-API-KEY: reporting-system12" \
   -F "location=Chennai" \
   -F "district=Tinaka" \
-  -F "date=April 18, 2026" \
-  -F "institution_type=government hospital" \
-  -F "issue_type=sanitation and cleanliness" \
-  -F "severity_level=high" \
-  -F "emotional_indicator=frustration" \
-  -F "raw_text=Ward B has overflowing bins." \
+  -F "reportDateLabel=April 18, 2026" \
+  -F "institutionType=government hospital" \
+  -F "issueType=sanitation and cleanliness" \
+  -F "severityLevel=high" \
+  -F "emotionalIndicator=frustration" \
+  -F "rawText=Ward B has overflowing bins." \
   -F "evidence=@/path/to/photo.jpg" \
   -F "evidence=@/path/to/audio.wav"
 ```
