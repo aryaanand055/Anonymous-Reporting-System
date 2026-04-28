@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { generateReportSummary, generateSeverityFromText, getEmbedding } from "@/ai/summarize";
+import { generateReportSummary, generateSeverityFromText, getEmbedding, analyzeReportDetails } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
 import { decryptPayload, type EncryptedPayload } from "@/lib/encryption";
 import { analyzeReportDepartments } from "@/lib/report-routing";
@@ -257,8 +257,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const location = normalizeText(data.location) ?? "Unknown location";
-    const district = normalizeText(data.district) ?? "Unknown district";
+    const rawText = normalizeText(data.rawText ?? data.raw_text);
+
+    // AI Extraction for missing fields (Hardware only sends rawText now)
+    let aiExtracted = { location: "Unknown location", district: "Unknown district", institutionType: "Unspecified institution", issueType: "Unspecified issue" };
+    if (rawText && (!data.location || !data.institutionType || !data.issueType)) {
+      console.log("[POST /api/reports] Reconstructing missing metadata from rawText via AI...");
+      aiExtracted = await analyzeReportDetails(rawText);
+    }
+
+    const location = normalizeText(data.location) ?? aiExtracted.location;
+    const district = normalizeText(data.district) ?? aiExtracted.district;
     const reportDateLabel =
       normalizeText(data.reportDateLabel ?? data.date) ??
       new Date().toLocaleDateString("en-US", {
@@ -266,10 +275,10 @@ export async function POST(req: NextRequest) {
         day: "numeric",
         year: "numeric",
       });
-    const institutionType = normalizeText(data.institutionType ?? data.institution_type) ?? "Unspecified institution";
-    const issueType = normalizeText(data.issueType ?? data.issue_type) ?? "Unspecified issue";
+    const institutionType = normalizeText(data.institutionType ?? data.institution_type) ?? aiExtracted.institutionType;
+    const issueType = normalizeText(data.issueType ?? data.issue_type) ?? aiExtracted.issueType;
     const emotionalIndicator = normalizeText(data.emotionalIndicator ?? data.emotional_indicator) ?? "unspecified";
-    const rawText = normalizeText(data.rawText ?? data.raw_text);
+    
     const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
     const title = `${issueType} at ${institutionType}`;
     const description = narrativeText;

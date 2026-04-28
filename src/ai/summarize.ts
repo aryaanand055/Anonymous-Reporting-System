@@ -97,3 +97,75 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 }
 
+export async function analyzeReportDetails(text: string): Promise<{
+  location: string;
+  district: string;
+  institutionType: string;
+  issueType: string;
+}> {
+  const prompt = `
+Extract report details from the following incident description. 
+Respond with ONLY a raw JSON object (no markdown, no backticks).
+
+JSON Structure:
+{
+  "location": "Specific place name mentioned (e.g. Ward B, Central Park)",
+  "district": "General area or city district (e.g. Chennai, T.Nagar)",
+  "institutionType": "Type of place (e.g. Hospital, School, Public Office)",
+  "issueType": "Brief category of the problem (e.g. Sanitation, Bribery, Maintenance)"
+}
+
+If a field is not clear, use "Unspecified".
+
+Description: "${text}"
+`;
+
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (groqApiKey) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${groqApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+          max_tokens: 512,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content ?? "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Groq extraction failed:", error);
+    }
+  }
+
+  // Fallback to Gemini (via genkit)
+  try {
+    const response = await ai.generate({ prompt });
+    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch (error) {
+    console.error("Gemini extraction failed:", error);
+  }
+
+  return {
+    location: "Unspecified",
+    district: "Unspecified",
+    institutionType: "Unspecified",
+    issueType: "Unspecified",
+  };
+}
+
