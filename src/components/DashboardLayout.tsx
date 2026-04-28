@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Shield, LayoutDashboard, FileText, Settings, LogOut, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DEPARTMENT_DIRECTORY } from "@/lib/report-routing";
+import { DEPARTMENT_DIRECTORY } from "@/types/reports";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;

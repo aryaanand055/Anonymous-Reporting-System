@@ -53,6 +53,58 @@ export const DEPARTMENT_LABELS: Record<Department, string> = {
   transport_infrastructure: "Transport & Infrastructure",
 };
 
+export interface DepartmentDirectoryEntry {
+  department: Department;
+  slug: string;
+  title: string;
+  description: string;
+}
+
+export const DEPARTMENT_DIRECTORY: DepartmentDirectoryEntry[] = [
+  {
+    department: "human_rights",
+    slug: "human-rights",
+    title: DEPARTMENT_LABELS.human_rights,
+    description: "Rights violations, harassment, discrimination, abuse, exploitation, or threats to dignity.",
+  },
+  {
+    department: "fire",
+    slug: "fire",
+    title: DEPARTMENT_LABELS.fire,
+    description: "Fire hazards, smoke, gas leaks, electrical risks, explosions, or urgent evacuation concerns.",
+  },
+  {
+    department: "police_security",
+    slug: "police-security",
+    title: DEPARTMENT_LABELS.police_security,
+    description: "Theft, assault, threats, violence, missing persons, or safety/security incidents.",
+  },
+  {
+    department: "health_safety",
+    slug: "health-safety",
+    title: DEPARTMENT_LABELS.health_safety,
+    description: "Illness, contamination, medical concerns, unsafe conditions, or public health risks.",
+  },
+  {
+    department: "education",
+    slug: "education",
+    title: DEPARTMENT_LABELS.education,
+    description: "School or campus issues, bullying, staff misconduct, facility problems, or student welfare.",
+  },
+  {
+    department: "sanitation",
+    slug: "sanitation",
+    title: DEPARTMENT_LABELS.sanitation,
+    description: "Waste removal, cleanliness, sewage, drainage, garbage, or environmental hygiene issues.",
+  },
+  {
+    department: "transport_infrastructure",
+    slug: "transport-infrastructure",
+    title: DEPARTMENT_LABELS.transport_infrastructure,
+    description: "Road damage, traffic hazards, public transport failures, bridges, walkways, or infrastructure issues.",
+  },
+];
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   low: "Low",
   medium: "Medium",

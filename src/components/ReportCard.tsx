@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Report, DEPARTMENT_LABELS, PRIORITY_LABELS, STATUS_LABELS } from "@/types/reports";
+import { Report, DEPARTMENT_LABELS, PRIORITY_LABELS, STATUS_LABELS, DEPARTMENT_DIRECTORY } from "@/types/reports";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { DEPARTMENT_DIRECTORY } from "@/lib/report-routing";
 
 interface ReportCardProps {
   report: Report;
