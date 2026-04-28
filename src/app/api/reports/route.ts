@@ -151,10 +151,15 @@ async function parseHardwareSubmission(req: NextRequest) {
       } satisfies HardwarePayload;
     }
 
+    const allFormKeys = [...formData.keys()];
+    console.log("[parseHardwareSubmission] All form keys:", allFormKeys);
+
     const evidenceFiles = [
       ...formData.getAll(REPORT_EVIDENCE_FIELD_NAME),
       ...formData.getAll(`${REPORT_EVIDENCE_FIELD_NAME}[]`),
     ].filter(isFileEntry);
+
+    console.log(`[parseHardwareSubmission] Evidence files found: ${evidenceFiles.length}`, evidenceFiles.map(f => `${f.name} (${f.type || "no-type"}, ${f.size}B)`));
 
     return {
       data,
@@ -286,13 +291,6 @@ export async function POST(req: NextRequest) {
 
     const incidentId = matchedIncidentId || `INC-${Date.now()}`;
 
-    // Base Severity
-    const baseSeverity = normalizeSeverity(data.severity_level) ?? (await generateSeverityFromText(narrativeText));
-    const baseScore = severityToScore(baseSeverity);
-
-    const incidentReports = await ReportModel.find({ incidentId });
-    const count = incidentReports.length;
-
     let trackingId = generateTrackingId();
     for (let attempts = 0; attempts < 5; attempts += 1) {
       const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
@@ -302,14 +300,29 @@ export async function POST(req: NextRequest) {
       trackingId = generateTrackingId();
     }
 
+    console.log(`[POST /api/reports] evidenceFiles.length=${evidenceFiles.length}, calling uploadReportEvidence=${evidenceFiles.length > 0}`);
     const evidence = evidenceFiles.length ? await uploadReportEvidence(trackingId, incidentId, evidenceFiles) : [];
     uploadedEvidenceIds = evidence.map((item) => item.fileId);
 
     // AI Evidence Adjustments
     let evidenceFlags: string[] = [];
+    let combinedDescriptions = "";
+
     evidence.forEach(e => {
       if (e.flags) evidenceFlags.push(...e.flags);
+      if (e.aiDescription) combinedDescriptions += e.aiDescription + ". ";
     });
+
+    const fullTextForSeverity = combinedDescriptions 
+        ? `${rawText ?? ""}\n\nVisual Evidence Descriptions: ${combinedDescriptions.trim()}` 
+        : (rawText ?? description);
+
+    // Base Severity (now incorporates Visual Evidence Descriptions)
+    const baseSeverity = await generateSeverityFromText(fullTextForSeverity);
+    const baseScore = severityToScore(baseSeverity);
+
+    const incidentReports = await ReportModel.find({ incidentId });
+    const count = incidentReports.length;
 
     const finalScore = calculateClusterSeverity(baseScore, count);
     const adjustedScore = adjustSeverityForEvidence(finalScore, evidenceFlags);

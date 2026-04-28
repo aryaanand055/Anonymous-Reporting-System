@@ -19,6 +19,10 @@ function mapReportEvidence(evidence: any[] | undefined): ReportEvidence[] {
     size: item.size ?? 0,
     uploadedAt:
       item.uploadedAt instanceof Date ? item.uploadedAt.toISOString() : item.uploadedAt ?? new Date().toISOString(),
+    hash: item.hash,
+    flags: Array.isArray(item.flags) ? item.flags : [],
+    isSuspicious: item.isSuspicious ?? false,
+    aiDescription: item.aiDescription ?? undefined,
   }));
 }
 

@@ -27,10 +27,27 @@ export interface ReportEvidenceMetadata {
     hash?: string;
     flags?: string[];
     isSuspicious?: boolean;
+    aiDescription?: string;
 }
 
 function getFileHash(buffer: Buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function resolveMimeFromFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  };
+  return map[ext] ?? "";
 }
 
 function basicFakeCheck(file: File, buffer: Buffer) {
@@ -42,13 +59,121 @@ function basicFakeCheck(file: File, buffer: Buffer) {
   return issues;
 }
 
-async function detectFakeEvidence(file: File): Promise<string[]> {
-  const flags: string[] = [];
-  // Mock AI detection for demonstration (hooks via external APIs ideally)
-  if (file.name.toLowerCase().includes("deepfake")) flags.push("deepfake");
-  if (file.name.toLowerCase().includes("manipulated")) flags.push("manipulated");
-  if (file.name.toLowerCase().includes("ai_generated")) flags.push("ai_generated");
-  return flags;
+async function generateMetadataDescription(filename: string, mimeType: string, sizeBytes: number, apiKey: string): Promise<string> {
+  const sizeMb = (sizeBytes / (1024 * 1024)).toFixed(2);
+  const ext = filename.split(".").pop()?.toUpperCase() ?? "file";
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `An evidence file has been submitted to an anonymous incident reporting system. Generate a concise 1-2 sentence description for it based on the metadata below. Respond with ONLY the description text, no extra commentary.\n\nFilename: ${filename}\nFile type: ${mimeType} (${ext})\nFile size: ${sizeMb} MB`
+            }]
+          }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 512 }
+        })
+      }
+    );
+    if (!response.ok) return "";
+    const data = await response.json();
+    return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function analyzeEvidence(file: File, mimeType: string, buffer: Buffer): Promise<{ flags: string[], description: string }> {
+  const result: { flags: string[], description: string } = { flags: [], description: "" };
+
+  // Use the explicit mimeType — file.type can be empty when parsed server-side
+  const effectiveMimeType = mimeType || file.type || "";
+  console.log(`[analyzeEvidence] filename=${file.name} mimeType=${effectiveMimeType} size=${buffer.length}`);
+
+  const isImage = effectiveMimeType.startsWith("image/");
+  const isVideo = effectiveMimeType.startsWith("video/");
+  // Gemini vision supports PDF inline; Word/other docs are not supported for vision
+  const isGeminiVisionSupported = isImage || isVideo || effectiveMimeType === "application/pdf";
+
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY;
+  if (!apiKey) {
+    console.warn("[analyzeEvidence] GOOGLE_GENAI_API_KEY is not set, skipping AI analysis.");
+    return result;
+  }
+
+  // For file types Gemini vision can't process, fall back to metadata-based description
+  if (!isGeminiVisionSupported) {
+    console.log(`[analyzeEvidence] Non-visual file type "${effectiveMimeType}", generating metadata description.`);
+    if (file.name.toLowerCase().includes("deepfake")) result.flags.push("deepfake");
+    result.description = await generateMetadataDescription(file.name, effectiveMimeType, buffer.length, apiKey);
+    console.log(`[analyzeEvidence] Metadata description: "${result.description}"`);
+    return result;
+  }
+
+  const mediaTypeStr = isImage ? "image" : isVideo ? "video" : "document";
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                text: `You are a forensic AI analyst. Analyze this ${mediaTypeStr} and respond with ONLY a raw JSON object (no markdown, no backticks, no explanation). The JSON must have exactly two keys:\n- "flags": an array of strings describing any concerns (e.g. "manipulated", "deepfake", "ai_generated"), or an empty array [] if the ${mediaTypeStr} appears authentic.\n- "description": a concise 1-2 sentence description of what is visually shown in the ${mediaTypeStr}.\n\nExample: {"flags": [], "description": "A photo of a flooded street with debris visible."}`
+              },
+              { inlineData: { mimeType: effectiveMimeType, data: buffer.toString("base64") } }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1024,
+          }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[analyzeEvidence] Gemini API error ${response.status}:`, errorText);
+      return result;
+    }
+
+    const data = await response.json();
+    // Gemini 2.5 returns thinking tokens first (part.thought = true) — find the actual text part
+    const parts: Array<{ text?: string; thought?: boolean }> = data?.candidates?.[0]?.content?.parts ?? [];
+    const textPart = [...parts].reverse().find((p) => !p.thought && typeof p.text === "string");
+    const rawText: string = textPart?.text ?? "";
+    console.log("[analyzeEvidence] Raw Gemini response:", rawText.slice(0, 300));
+
+    // Extract JSON object even if model wraps it in extra text
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn("[analyzeEvidence] Could not find JSON object in response:", rawText);
+      return result;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    if (Array.isArray(parsed.flags)) {
+      result.flags.push(...parsed.flags.filter((f: unknown) => typeof f === "string"));
+    }
+    if (parsed.description && typeof parsed.description === "string" && parsed.description.trim()) {
+      result.description = parsed.description.trim();
+    }
+
+    console.log("[analyzeEvidence] Parsed result:", result);
+  } catch (error) {
+    console.error("[analyzeEvidence] Gemini Vision AI Analysis failed:", error);
+  }
+
+  return result;
 }
 
 export function getReportEvidenceBucket() {
@@ -86,11 +211,14 @@ export async function uploadReportEvidence(
                 throw new Error(`File too large: ${file.name}`);
             }
 
-            if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-                throw new Error(`Unsupported file type: ${file.type}`);
+            // Resolve contentType early — file.type can be empty in server-side form parsing
+            const contentType = (file.type?.trim()) || resolveMimeFromFilename(file.name);
+            console.log(`[uploadReportEvidence] Processing: ${file.name} | resolved contentType: ${contentType}`);
+
+            if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+                throw new Error(`Unsupported file type: ${contentType || "unknown"} (${file.name})`);
             }
 
-            const contentType = file.type?.trim();
             const filename = file.name?.trim() || "evidence";
             const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -109,8 +237,9 @@ export async function uploadReportEvidence(
                 flags.push("duplicate_file");
             }
 
-            const aiFlags = await detectFakeEvidence(file);
-            flags.push(...aiFlags);
+            const analysis = await analyzeEvidence(file, contentType, buffer);
+            flags.push(...analysis.flags);
+            const aiDescription = analysis.description;
 
             const isSuspicious = flags.length > 0;
 
@@ -128,6 +257,7 @@ export async function uploadReportEvidence(
                         hash,
                         flags,
                         isSuspicious,
+                        aiDescription,
                     },
                 });
 
@@ -146,6 +276,7 @@ export async function uploadReportEvidence(
                 hash,
                 flags,
                 isSuspicious,
+                aiDescription,
             });
         }
 

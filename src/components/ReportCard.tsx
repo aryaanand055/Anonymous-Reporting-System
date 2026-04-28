@@ -219,35 +219,91 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-0">
-            <div className="space-y-3 overflow-y-auto pr-1 max-h-[65vh]">
-              {evidence.map((item, index) => {
-                const active = index === selectedEvidenceIndex;
-                return (
-                  <button
-                    key={item.fileId}
-                    type="button"
-                    onClick={() => setSelectedEvidenceIndex(index)}
-                    className={cn(
-                      "w-full text-left rounded-lg border p-3 transition-colors",
-                      active ? "border-primary bg-primary/5" : "hover:bg-muted/60"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-medium truncate">{item.filename}</p>
-                        <p className="text-xs text-muted-foreground truncate">{item.contentType}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(item.size / (1024 * 1024)).toFixed(2)} MB
-                        </p>
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-0 flex-1 overflow-hidden">
+            {/* Left Panel: File List + AI Description */}
+            <div className="flex flex-col gap-3 overflow-hidden min-h-0">
+              {/* File picker */}
+              <div className="space-y-2 overflow-y-auto pr-1 max-h-[40%] shrink-0">
+                {evidence.map((item, index) => {
+                  const active = index === selectedEvidenceIndex;
+                  return (
+                    <button
+                      key={item.fileId}
+                      type="button"
+                      onClick={() => setSelectedEvidenceIndex(index)}
+                      className={cn(
+                        "w-full text-left rounded-lg border p-3 transition-all duration-200",
+                        active ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "hover:bg-muted/60"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="text-sm font-semibold truncate flex items-center gap-1.5">
+                            {item.filename}
+                            {item.isSuspicious && <span className="text-destructive text-xs" title="Suspicious File">⚠️</span>}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground truncate">{item.contentType} • {(item.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 text-[10px] h-5 px-1.5 font-mono">
+                          #{index + 1}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className="shrink-0">
-                        #{index + 1}
-                      </Badge>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* AI Forensic Analysis Panel — fills remaining space */}
+              <div className="flex-1 rounded-lg border bg-muted/20 overflow-y-auto p-4 space-y-3 min-h-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                    ✦ Forensic AI Analysis
+                  </span>
+                  {selectedEvidence?.isSuspicious && (
+                    <Badge variant="destructive" className="h-4 text-[10px] px-1.5">Suspicious</Badge>
+                  )}
+                </div>
+
+                {selectedEvidence?.aiDescription ? (
+                  <p className="text-sm text-foreground/80 leading-relaxed italic border-l-2 border-primary/30 pl-3">
+                    "{selectedEvidence.aiDescription}"
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    No AI description available for this file.
+                  </p>
+                )}
+
+                {selectedEvidence?.flags && selectedEvidence.flags.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Flags Detected</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedEvidence.flags.map((flag) => (
+                        <Badge
+                          key={flag}
+                          variant="secondary"
+                          className="text-[10px] font-mono bg-destructive/10 text-destructive border-transparent rounded-sm"
+                        >
+                          {flag.replace(/_/g, " ")}
+                        </Badge>
+                      ))}
                     </div>
-                  </button>
-                );
-              })}
+                  </div>
+                ) : selectedEvidence ? (
+                  <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                    <span>✓</span>
+                    <span>No authenticity concerns detected</span>
+                  </div>
+                ) : null}
+
+                {selectedEvidence && (
+                  <div className="pt-2 border-t border-muted/50 space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">File Metadata</p>
+                    <p className="text-[11px] text-muted-foreground font-mono break-all">ID: {selectedEvidence.fileId}</p>
+                    <p className="text-[11px] text-muted-foreground">{(selectedEvidence.size / (1024 * 1024)).toFixed(2)} MB • {selectedEvidence.contentType}</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="min-h-[55vh] flex flex-col rounded-lg border bg-muted/20 overflow-hidden">
@@ -258,12 +314,17 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                       <p className="font-medium truncate">{selectedEvidence.filename}</p>
                       <p className="text-xs text-muted-foreground truncate">{selectedEvidence.contentType}</p>
                     </div>
-                    <Button asChild variant="outline" size="sm" className="gap-2">
-                      <a href={previewUrl} target="_blank" rel="noreferrer">
-                        <Download className="h-4 w-4" />
-                        Open
-                      </a>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {selectedEvidence.isSuspicious && (
+                        <Badge variant="destructive" className="h-6 text-[10px] px-2">Suspicious</Badge>
+                      )}
+                      <Button asChild variant="outline" size="sm" className="h-8 gap-2">
+                        <a href={previewUrl} target="_blank" rel="noreferrer">
+                          <Download className="h-4 w-4" />
+                          Open
+                        </a>
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="flex-1 min-h-0 p-4">
@@ -277,7 +338,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                       <iframe
                         src={previewUrl}
                         title={selectedEvidence.filename}
-                        className="h-full w-full rounded-md bg-background"
+                        className="h-full w-full rounded-md bg-background shadow-sm"
                       />
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center text-center gap-3 rounded-md border border-dashed bg-background p-6">
@@ -298,9 +359,9 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                   </div>
 
                   <Separator />
-                  <div className="p-4 text-xs text-muted-foreground flex items-center justify-between gap-3">
-                    <span>Uploaded evidence is stored privately in GridFS and served only through this dashboard view.</span>
-                    <span>File {(selectedEvidence.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  <div className="p-3 text-[10px] text-muted-foreground flex items-center justify-between gap-3 bg-background/50">
+                    <span>Evidence stored in GridFS • SHA-256 Verified Scan</span>
+                    <span>File ID: {selectedEvidence.fileId.substring(0, 12)}...</span>
                   </div>
                 </>
               ) : (
