@@ -242,6 +242,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const rawText = normalizeText(data.raw_text ?? data.rawText);
+
+    if (!rawText) {
+      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
+    }
+
     const location = normalizeText(data.location) ?? "Unknown location";
     const district = normalizeText(data.district) ?? "Unknown district";
     const reportDateLabel =
@@ -252,12 +258,11 @@ export async function POST(req: NextRequest) {
         year: "numeric",
       });
     const institutionType = normalizeText(data.institution_type) ?? "Unspecified institution";
-    const issueType = normalizeText(data.issue_type) ?? "Unspecified issue";
+    const issueType = normalizeText(data.issue_type) ?? "Incident Report";
     const emotionalIndicator = normalizeText(data.emotional_indicator) ?? "unspecified";
-    const rawText = normalizeText(data.raw_text ?? data.rawText);
-    const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
-    const title = `${issueType} at ${institutionType}`;
-    const description = narrativeText;
+    const narrativeText = rawText;
+    const title = rawText.slice(0, 120);
+    const description = rawText;
 
     await dbConnect();
 
@@ -327,7 +332,7 @@ export async function POST(req: NextRequest) {
       description,
       location,
       issueType,
-      rawText: rawText ?? description,
+      rawText,
       institutionType,
       severityLevel,
     });
@@ -354,7 +359,7 @@ export async function POST(req: NextRequest) {
       issueType,
       severityLevel,
       emotionalIndicator,
-      rawText: rawText ?? description,
+      rawText,
       priority,
       department,
       departments,
@@ -373,7 +378,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Report received successfully",
-      id: report._id.toString(),
       trackingId: report.trackingId,
     });
 
