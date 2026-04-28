@@ -151,10 +151,15 @@ async function parseHardwareSubmission(req: NextRequest) {
       } satisfies HardwarePayload;
     }
 
+    const allFormKeys = [...formData.keys()];
+    console.log("[parseHardwareSubmission] All form keys:", allFormKeys);
+
     const evidenceFiles = [
       ...formData.getAll(REPORT_EVIDENCE_FIELD_NAME),
       ...formData.getAll(`${REPORT_EVIDENCE_FIELD_NAME}[]`),
     ].filter(isFileEntry);
+
+    console.log(`[parseHardwareSubmission] Evidence files found: ${evidenceFiles.length}`, evidenceFiles.map(f => `${f.name} (${f.type || "no-type"}, ${f.size}B)`));
 
     return {
       data,
@@ -290,6 +295,7 @@ export async function POST(req: NextRequest) {
       trackingId = generateTrackingId();
     }
 
+    console.log(`[POST /api/reports] evidenceFiles.length=${evidenceFiles.length}, calling uploadReportEvidence=${evidenceFiles.length > 0}`);
     const evidence = evidenceFiles.length ? await uploadReportEvidence(trackingId, incidentId, evidenceFiles) : [];
     uploadedEvidenceIds = evidence.map((item) => item.fileId);
 

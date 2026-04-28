@@ -33,7 +33,7 @@ function normalizeRouteReference(input: string | undefined): string {
 
 export async function POST(
     req: NextRequest,
-    { params }: { params: { reportId: string } }
+    { params }: { params: Promise<{ reportId: string }> }
 ) {
     try {
         const configuredHardwareApiKey = process.env.HARDWARE_API_KEY;
@@ -48,7 +48,8 @@ export async function POST(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const normalizedRouteReference = normalizeRouteReference(params?.reportId);
+        const { reportId } = await params;
+        const normalizedRouteReference = normalizeRouteReference(reportId);
         if (!normalizedRouteReference) {
             return NextResponse.json({ error: "Invalid reportId" }, { status: 400 });
         }

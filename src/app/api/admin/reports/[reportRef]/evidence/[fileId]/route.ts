@@ -25,11 +25,12 @@ function buildContentDisposition(filename: string) {
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: { reportRef: string; fileId: string } }
+    { params }: { params: Promise<{ reportRef: string; fileId: string }> }
 ) {
     try {
-        const reportRef = normalizeRouteReference(params?.reportRef);
-        const fileId = decodeURIComponent(params?.fileId ?? "").trim();
+        const { reportRef: rawReportRef, fileId: rawFileId } = await params;
+        const reportRef = normalizeRouteReference(rawReportRef);
+        const fileId = decodeURIComponent(rawFileId ?? "").trim();
 
         if (!reportRef || !fileId) {
             return NextResponse.json(
