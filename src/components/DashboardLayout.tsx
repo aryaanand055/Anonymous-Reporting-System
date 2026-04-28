@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Shield, LayoutDashboard, FileText, Settings, LogOut, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DEPARTMENT_DIRECTORY } from "@/types/reports";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -19,7 +20,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
           <span className="font-headline font-bold text-primary tracking-tight text-xl text-balance">Anonymous Reporting</span>
         </div>
-        
+
         <nav className="flex-1 p-4 space-y-2 mt-4">
           <Link href="/">
             <div className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors">
@@ -46,6 +47,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               Fire Dept
             </div>
           </Link>
+
+          <div className="px-4 pt-4 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Departments
+          </div>
+
+          {DEPARTMENT_DIRECTORY.filter((entry) => entry.department !== "human_rights" && entry.department !== "fire").map((entry) => (
+            <Link key={entry.department} href={`/dashboard/${entry.slug}`}>
+              <div className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors">
+                <FileText className="h-4 w-4" />
+                {entry.title}
+              </div>
+            </Link>
+          ))}
         </nav>
 
         <div className="p-4 border-t">

@@ -136,7 +136,11 @@ export async function POST(
         }
 
         // 8. Upload evidence files
-        const newEvidence = await uploadReportEvidence(report.trackingId, evidenceFiles);
+        const newEvidence = await uploadReportEvidence(
+            report.trackingId,
+            report.incidentId ?? report.trackingId,
+            evidenceFiles
+        );
 
         // 9. Append to report's evidence array
         if (!Array.isArray(report.evidence)) {
@@ -153,6 +157,18 @@ export async function POST(
         });
     } catch (error) {
         console.error("Evidence upload error:", error);
+
+        if (error instanceof Error) {
+            if (
+                error.message.startsWith("Unsupported file type") ||
+                error.message.startsWith("File too large") ||
+                error.message.includes("authenticity concerns") ||
+                error.message.includes("Too many evidence files")
+            ) {
+                return NextResponse.json({ error: error.message }, { status: 400 });
+            }
+        }
+
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

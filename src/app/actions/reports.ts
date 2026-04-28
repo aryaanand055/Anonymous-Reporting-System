@@ -5,6 +5,7 @@ import ReportModel from "@/models/Report";
 import { Department, Priority, Report, ReportEvidence, ReportStatus } from "@/types/reports";
 import { revalidatePath } from "next/cache";
 import { generateReportSummary } from "@/ai/summarize";
+import { analyzeReportDepartments } from "@/lib/report-routing";
 
 function mapReportEvidence(evidence: any[] | undefined): ReportEvidence[] {
   if (!Array.isArray(evidence)) {
@@ -21,6 +22,24 @@ function mapReportEvidence(evidence: any[] | undefined): ReportEvidence[] {
   }));
 }
 
+function mapReportDepartments(departments: any[] | undefined, fallbackDepartment: Department): Department[] {
+  const validDepartments: Department[] = Array.isArray(departments)
+    ? departments.filter((value): value is Department =>
+      [
+        "human_rights",
+        "fire",
+        "police_security",
+        "health_safety",
+        "education",
+        "sanitation",
+        "transport_infrastructure",
+      ].includes(value)
+    )
+    : [];
+
+  return validDepartments.length ? [...new Set([fallbackDepartment, ...validDepartments])] : [fallbackDepartment];
+}
+
 function generateTrackingId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let suffix = "";
@@ -33,6 +52,13 @@ function generateTrackingId() {
 export async function createReport(data: any) {
   await dbConnect();
   try {
+    const routing = await analyzeReportDepartments({
+      title: data.title,
+      description: data.description,
+      location: data.location,
+      issueType: data.title,
+    });
+
     const trackingId = generateTrackingId();
     const aiSummary = await generateReportSummary(data.description);
     const report = await ReportModel.create({
@@ -40,11 +66,13 @@ export async function createReport(data: any) {
       trackingId,
       aiSummary,
       status: "pending",
+      department: routing.primaryDepartment,
+      departments: routing.departments,
     });
     revalidatePath("/");
     revalidatePath("/dashboard/admin");
-    if (data.department) {
-      revalidatePath(`/dashboard/${data.department.replace("_", "-")}`);
+    for (const department of routing.departments) {
+      revalidatePath(`/dashboard/${department.replace("_", "-")}`);
     }
     return { success: true, id: report._id.toString(), trackingId: report.trackingId };
   } catch (error) {
@@ -56,7 +84,11 @@ export async function createReport(data: any) {
 export async function getReports(department?: Department): Promise<Report[]> {
   await dbConnect();
   try {
-    const query = department ? { department } : {};
+    const query = department
+      ? {
+        $or: [{ department }, { departments: department }],
+      }
+      : {};
     const reports = await ReportModel.find(query).sort({ createdAt: -1 }).lean();
 
     return reports.map((report: any) => ({
@@ -73,6 +105,7 @@ export async function getReports(department?: Department): Promise<Report[]> {
       emotionalIndicator: report.emotionalIndicator ?? "unspecified",
       rawText: report.rawText,
       department: report.department ?? "human_rights",
+      departments: mapReportDepartments(report.departments, report.department ?? "human_rights"),
       priority: report.priority ?? report.severityLevel ?? "medium",
       status: report.status ?? "pending",
       aiSummary: report.aiSummary,
@@ -111,7 +144,7 @@ export async function updateReportRouting(
 
     await ReportModel.findByIdAndUpdate(reportId, {
       ...(updates.priority ? { priority: updates.priority, severityLevel: updates.priority } : {}),
-      ...(updates.department ? { department: updates.department } : {}),
+      ...(updates.department ? { department: updates.department, departments: [updates.department] } : {}),
     });
 
     revalidatePath("/");
@@ -148,6 +181,8 @@ export async function getReportStatusByTrackingId(trackingId: string) {
         status: report.status,
         issueType: report.issueType ?? report.title ?? "Unspecified issue",
         location: report.location ?? "Unknown location",
+        department: report.department ?? "human_rights",
+        departments: mapReportDepartments(report.departments, report.department ?? "human_rights"),
         createdAt:
           report.createdAt instanceof Date
             ? report.createdAt.toISOString()

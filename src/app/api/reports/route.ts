@@ -4,6 +4,7 @@ import ReportModel from "@/models/Report";
 import { generateReportSummary, generateSeverityFromText, getEmbedding } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
 import { decryptPayload, type EncryptedPayload } from "@/lib/encryption";
+import { analyzeReportDepartments } from "@/lib/report-routing";
 import {
   MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES,
   MAX_REPORT_EVIDENCE_FILES,
@@ -28,6 +29,26 @@ type HardwarePayload = {
   rawText?: string;
 };
 
+type SeverityValue = "low" | "medium" | "high";
+
+function normalizeText(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+}
+
+function normalizeSeverity(value: unknown): SeverityValue | undefined {
+  const normalized = normalizeText(value)?.toLowerCase();
+  if (normalized === "low" || normalized === "medium" || normalized === "high") {
+    return normalized;
+  }
+
+  return undefined;
+}
+
 function generateTrackingId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let suffix = "";
@@ -37,12 +58,10 @@ function generateTrackingId() {
   return `AR-${suffix}`;
 }
 
-function inferDepartment(issueType: string) {
-  const normalized = issueType.toLowerCase();
-  if (/(fire|smoke|burn|explosion|electrical)/.test(normalized)) {
-    return "fire";
+function revalidateDepartmentPaths(departments: string[]) {
+  for (const department of departments) {
+    revalidatePath(`/dashboard/${department.replace("_", "-")}`);
   }
-  return "human_rights";
 }
 
 function cosineSimilarity(a: number[], b: number[]) {
@@ -143,8 +162,15 @@ async function parseHardwareSubmission(req: NextRequest) {
     };
   }
 
-  const body = await req.json();
-  const encryptedField = body.encrypted;
+  let body: unknown = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
+  const safeBody = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const encryptedField = safeBody.encrypted;
 
   let data: HardwarePayload;
 
@@ -160,7 +186,7 @@ async function parseHardwareSubmission(req: NextRequest) {
       throw new Error(`Failed to decrypt payload: ${error instanceof Error ? error.message : "unknown error"}`);
     }
   } else {
-    data = body as HardwarePayload;
+    data = safeBody as HardwarePayload;
   }
 
   return {
@@ -207,35 +233,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const location = data.location?.trim();
-    const district = data.district?.trim();
-    const reportDateLabel = data.date?.trim();
-    const institutionType = data.institution_type?.trim();
-    const issueType = data.issue_type?.trim();
-    const emotionalIndicator = data.emotional_indicator?.trim();
-    const rawText = (data.raw_text ?? data.rawText)?.trim();
-
-    if (!rawText) {
-      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
+    for (const file of evidenceFiles) {
+      if (file.size > MAX_REPORT_EVIDENCE_FILE_SIZE_BYTES) {
+        return NextResponse.json(
+          { error: `Each evidence file must be 20 MB or smaller: ${file.name || "unnamed file"}` },
+          { status: 400 }
+        );
+      }
     }
 
-    // 3. Simple Validation
-    if (
-      !location ||
-      !district ||
-      !reportDateLabel ||
-      !institutionType ||
-      !issueType ||
-      !emotionalIndicator
-    ) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
+    const location = normalizeText(data.location) ?? "Unknown location";
+    const district = normalizeText(data.district) ?? "Unknown district";
+    const reportDateLabel =
+      normalizeText(data.date) ??
+      new Date().toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    const institutionType = normalizeText(data.institution_type) ?? "Unspecified institution";
+    const issueType = normalizeText(data.issue_type) ?? "Unspecified issue";
+    const emotionalIndicator = normalizeText(data.emotional_indicator) ?? "unspecified";
+    const rawText = normalizeText(data.raw_text ?? data.rawText);
+    const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
+    const title = `${issueType} at ${institutionType}`;
+    const description = narrativeText;
 
     await dbConnect();
 
     // 🚀 Architecture Upgrade: Incident Clustering & Vector Search
-    const newEmbedding = await getEmbedding(rawText);
-    
+    const newEmbedding = await getEmbedding(narrativeText);
+
     // Compare against all existing reports (no time constraint)
     const existingReports = await ReportModel.find({}).lean();
 
@@ -301,17 +329,25 @@ export async function POST(req: NextRequest) {
       // send alert to dashboard / authorities
     }
 
-    const department = inferDepartment(issueType);
+    const routing = await analyzeReportDepartments({
+      title,
+      description,
+      location,
+      issueType,
+      rawText: rawText ?? description,
+      institutionType,
+      severityLevel,
+    });
+    const department = routing.primaryDepartment;
+    const departments = routing.departments;
     const priority = severityLevel;
-    const title = `${issueType} at ${institutionType}`;
-    const description = rawText || `${issueType} reported at ${institutionType} in ${location}.`;
 
     // 4. Generate AI Summary (reusing logic from server action)
     const aiSummary = await generateReportSummary(description);
 
 
 
-    
+
 
     // 5. Create Report
     const report = await ReportModel.create({
@@ -325,9 +361,10 @@ export async function POST(req: NextRequest) {
       issueType,
       severityLevel,
       emotionalIndicator,
-      rawText,
+      rawText: rawText ?? description,
       priority,
       department,
+      departments,
       aiSummary,
       incidentId,
       embedding: newEmbedding,
@@ -338,9 +375,7 @@ export async function POST(req: NextRequest) {
     // 6. Revalidate caches for the dashboard
     revalidatePath("/");
     revalidatePath("/dashboard/admin");
-    if (department) {
-      revalidatePath(`/dashboard/${department.replace("_", "-")}`);
-    }
+    revalidateDepartmentPaths(departments);
 
     return NextResponse.json({
       success: true,
@@ -380,6 +415,8 @@ export async function GET(req: NextRequest) {
         status: report.status,
         issueType: report.issueType ?? report.title ?? "Unspecified issue",
         location: report.location ?? "Unknown location",
+        department: report.department,
+        departments: Array.isArray(report.departments) ? report.departments : [report.department],
         createdAt:
           report.createdAt instanceof Date
             ? report.createdAt.toISOString()
