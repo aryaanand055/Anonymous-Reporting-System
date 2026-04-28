@@ -253,13 +253,6 @@ export async function POST(req: NextRequest) {
 
     const incidentId = matchedIncidentId || `INC-${Date.now()}`;
 
-    // Base Severity
-    const baseSeverity = await generateSeverityFromText(rawText);
-    const baseScore = severityToScore(baseSeverity);
-
-    const incidentReports = await ReportModel.find({ incidentId });
-    const count = incidentReports.length;
-
     let trackingId = generateTrackingId();
     for (let attempts = 0; attempts < 5; attempts += 1) {
       const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
@@ -274,9 +267,23 @@ export async function POST(req: NextRequest) {
 
     // AI Evidence Adjustments
     let evidenceFlags: string[] = [];
+    let combinedDescriptions = "";
+
     evidence.forEach(e => {
       if (e.flags) evidenceFlags.push(...e.flags);
+      if (e.aiDescription) combinedDescriptions += e.aiDescription + ". ";
     });
+
+    const fullTextForSeverity = combinedDescriptions 
+        ? `${rawText}\n\nVisual Evidence Descriptions: ${combinedDescriptions.trim()}` 
+        : rawText;
+
+    // Base Severity (now incorporates Visual Evidence Descriptions)
+    const baseSeverity = await generateSeverityFromText(fullTextForSeverity);
+    const baseScore = severityToScore(baseSeverity);
+
+    const incidentReports = await ReportModel.find({ incidentId });
+    const count = incidentReports.length;
 
     const finalScore = calculateClusterSeverity(baseScore, count);
     const adjustedScore = adjustSeverityForEvidence(finalScore, evidenceFlags);

@@ -30,6 +30,10 @@ const ReportEvidenceSchema = new Schema(
     contentType: { type: String, required: true },
     size: { type: Number, required: true },
     uploadedAt: { type: Date, required: true },
+    hash: { type: String },
+    flags: { type: [String], default: [] },
+    isSuspicious: { type: Boolean, default: false },
+    aiDescription: { type: String },
   },
   { _id: false }
 );

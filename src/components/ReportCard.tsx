@@ -224,7 +224,10 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-medium truncate">{item.filename}</p>
+                        <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                          {item.filename}
+                          {item.isSuspicious && <span className="text-destructive text-xs" title="Suspicious File">⚠️</span>}
+                        </p>
                         <p className="text-xs text-muted-foreground truncate">{item.contentType}</p>
                         <p className="text-xs text-muted-foreground">
                           {(item.size / (1024 * 1024)).toFixed(2)} MB
@@ -285,6 +288,33 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
                       </div>
                     )}
                   </div>
+                  
+                  {(selectedEvidence.aiDescription || (selectedEvidence.flags && selectedEvidence.flags.length > 0)) && (
+                    <div className="p-4 bg-muted/40 border-t border-muted/50 rounded-b-md">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-semibold text-xs text-primary tracking-wider uppercase flex items-center gap-1.5">
+                          Forensic AI Analysis
+                        </span>
+                        {selectedEvidence.isSuspicious && (
+                            <Badge variant="destructive" className="h-4 text-[10px] px-1 pointer-events-none fade-in">Suspicious</Badge>
+                        )}
+                      </div>
+                      {selectedEvidence.aiDescription && (
+                        <p className="text-sm text-foreground/80 leading-snug italic border-l-2 border-primary/20 pl-3">
+                          "{selectedEvidence.aiDescription}"
+                        </p>
+                      )}
+                      {selectedEvidence.flags && selectedEvidence.flags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-3">
+                          {selectedEvidence.flags.map(flag => (
+                              <Badge key={flag} variant="secondary" className="text-[10px] rounded-md font-mono bg-muted-foreground/10 text-muted-foreground border-transparent">
+                                {flag.replace(/_/g, " ")}
+                              </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <Separator />
                   <div className="p-4 text-xs text-muted-foreground flex items-center justify-between gap-3">

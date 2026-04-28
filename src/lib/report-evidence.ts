@@ -27,6 +27,7 @@ export interface ReportEvidenceMetadata {
     hash?: string;
     flags?: string[];
     isSuspicious?: boolean;
+    aiDescription?: string;
 }
 
 function getFileHash(buffer: Buffer) {
@@ -42,13 +43,50 @@ function basicFakeCheck(file: File, buffer: Buffer) {
   return issues;
 }
 
-async function detectFakeEvidence(file: File): Promise<string[]> {
-  const flags: string[] = [];
-  // Mock AI detection for demonstration (hooks via external APIs ideally)
-  if (file.name.toLowerCase().includes("deepfake")) flags.push("deepfake");
-  if (file.name.toLowerCase().includes("manipulated")) flags.push("manipulated");
-  if (file.name.toLowerCase().includes("ai_generated")) flags.push("ai_generated");
-  return flags;
+async function analyzeEvidence(file: File, buffer: Buffer): Promise<{ flags: string[], description: string }> {
+  const result = { flags: [], description: "" };
+  
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  const isDoc = file.type === "application/pdf";
+
+  // Gemini 1.5 inline data supports images, short videos, and PDFs natively
+  if (!isImage && !isVideo && !isDoc) {
+    if (file.name.toLowerCase().includes("deepfake")) result.flags.push("deepfake" as never);
+    return result;
+  }
+
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY;
+  if (!apiKey) return result;
+
+  let mediaTypeStr = isImage ? "image" : isVideo ? "video" : "document";
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: `Analyze this ${mediaTypeStr} natively. Act as a forensic AI. Output a valid JSON object with exactly two keys: 'flags' (array of strings, like 'manipulated' or 'deepfake', or [] if clean), and 'description' (a concise 1-2 sentence description of exactly what visual evidence is shown in the ${mediaTypeStr}).` },
+            { inlineData: { mimeType: file.type, data: buffer.toString("base64") } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const cleanText = rawText.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(cleanText);
+
+    if (Array.isArray(parsed.flags)) result.flags.push(...parsed.flags as never[]);
+    if (parsed.description) result.description = parsed.description;
+  } catch (error) {
+    console.error("Gemini Vision AI Analysis failed:", error);
+  }
+
+  return result;
 }
 
 export function getReportEvidenceBucket() {
@@ -109,8 +147,9 @@ export async function uploadReportEvidence(
                 flags.push("duplicate_file");
             }
 
-            const aiFlags = await detectFakeEvidence(file);
-            flags.push(...aiFlags);
+            const analysis = await analyzeEvidence(file, buffer);
+            flags.push(...analysis.flags);
+            const aiDescription = analysis.description;
 
             const isSuspicious = flags.length > 0;
 
@@ -128,6 +167,7 @@ export async function uploadReportEvidence(
                         hash,
                         flags,
                         isSuspicious,
+                        aiDescription,
                     },
                 });
 
@@ -146,6 +186,7 @@ export async function uploadReportEvidence(
                 hash,
                 flags,
                 isSuspicious,
+                aiDescription,
             });
         }
 

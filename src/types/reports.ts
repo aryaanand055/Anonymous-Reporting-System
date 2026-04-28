@@ -8,7 +8,11 @@ export interface ReportEvidence {
   filename: string;
   contentType: string;
   size: number;
-  uploadedAt: Date | string;
+  uploadedAt: string | Date;
+  hash?: string;
+  flags?: string[];
+  isSuspicious?: boolean;
+  aiDescription?: string;
 }
 
 export interface Report {
