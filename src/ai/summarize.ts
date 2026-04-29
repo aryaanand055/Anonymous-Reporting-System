@@ -285,14 +285,30 @@ Description: "${text}"
     console.error("Gemini extraction failed:", error);
   }
 
-  // Final fallback: If we couldn't extract anything, it's spam.
+  // Final fallback: Offline Safety Net (Universal Coverage)
+  const incidentKeywords = [
+    // Fire & Safety
+    "fire", "smoke", "gas", "leak", "explosion", "burning", "flame", "emergency",
+    // Police & Security
+    "theft", "snatch", "robbery", "crime", "stole", "weapon", "assault", "violence", "threat", "fight",
+    // Health & Sanitation
+    "waste", "garbage", "trash", "hospital", "doctor", "medical", "blood", "sick", "disease", "smell", "sewage", "drain",
+    // Human Rights & Education
+    "bribe", "corruption", "money", "harassment", "abuse", "bully", "school", "teacher", "rights", "fraud",
+    // Infrastructure & Transport
+    "road", "bridge", "pothole", "traffic", "accident", "crash", "flood", "broken", "light", "water"
+  ];
+  const hasIncidentKeyword = incidentKeywords.some(k => lowerText.includes(k));
+
   return {
-    location: "Unspecified",
+    location: "Unspecified (Cloud Offline)",
     district: "Unspecified",
     institutionType: "Unspecified",
-    issueType: "Unspecified",
-    isSpam: true,
-    spamReason: "System Fallback: No details could be extracted."
+    issueType: hasIncidentKeyword ? "Emergency Manual Check Required" : "Unspecified",
+    isSpam: !hasIncidentKeyword,
+    spamReason: hasIncidentKeyword 
+      ? "AI services were unavailable, but incident keywords were detected. Please review manually." 
+      : "System Fallback: No details could be extracted and no keywords found."
   };
 }
 
