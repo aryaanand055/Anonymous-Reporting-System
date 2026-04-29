@@ -208,11 +208,13 @@ Description: "${text}"
   const commonSpam = ["hello", "hi", "test", "testing", "how are you", "thank you", "thanks", "bye", "what is this", "report it all", "good morning", "good evening"];
   const audioTags = /^[\[\(](music|laughter|applause|silence|noise|cough|breathing|unintelligible|speaking in foreign language|background noise)[\s\S]*[\]\)]$/i;
 
-  // Check if ALL words in the message are in the spam list
+  // Check if ALL words in the message are in the spam list or it mentions "testing"
   const isAllSpamWords = words.every(w => commonSpam.includes(w));
+  const containsTesting = lowerText.includes("testing") || lowerText.includes("test purposes") || lowerText.includes("functionality test");
 
   if (
     isAllSpamWords ||
+    containsTesting ||
     audioTags.test(text.trim()) ||
     lowerText.includes("speaking in foreign language") ||
     lowerText.includes("what is this") ||
@@ -225,7 +227,7 @@ Description: "${text}"
       institutionType: "Unspecified",
       issueType: "Unspecified",
       isSpam: true,
-      spamReason: "Heuristic: Repetitive noise or testing phrase"
+      spamReason: "Heuristic: Testing phrase or repetitive noise"
     };
   }
 
@@ -252,10 +254,13 @@ Description: "${text}"
         const content = data.choices[0]?.message?.content ?? "";
         const parsed = JSON.parse(content);
         
-        // If AI returns everything as Unspecified, it's probably spam
-        if (parsed.location === "Unspecified" && parsed.issueType === "Unspecified") {
+        // Robust check: If AI fails to find ANY concrete data, force spam.
+        const isLocEmpty = !parsed.location || parsed.location === "Unspecified" || parsed.location === "" || parsed.location === "None";
+        const isIssueEmpty = !parsed.issueType || parsed.issueType === "Unspecified" || parsed.issueType === "" || parsed.issueType === "None";
+
+        if (isLocEmpty && isIssueEmpty) {
           parsed.isSpam = true;
-          parsed.spamReason = parsed.spamReason || "No concrete incident details found.";
+          parsed.spamReason = parsed.spamReason || "Incomplete data: No incident or location identified.";
         }
         
         return parsed;
