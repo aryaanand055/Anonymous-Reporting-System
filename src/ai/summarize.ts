@@ -203,14 +203,18 @@ Description: "${text}"
 `;
 
   // Heuristic safety net for extremely short common spam or audio tags
-  const lowerText = text.toLowerCase().trim();
-  const commonSpam = ["hello", "hi", "test", "testing", "how are you", "thank you", "thanks", "bye", "what is this", "report it all"];
+  const lowerText = text.toLowerCase().trim().replace(/[.,!?]/g, "");
+  const words = lowerText.split(/\s+/);
+  const commonSpam = ["hello", "hi", "test", "testing", "how are you", "thank you", "thanks", "bye", "what is this", "report it all", "good morning", "good evening"];
   const audioTags = /^[\[\(](music|laughter|applause|silence|noise|cough|breathing|unintelligible|speaking in foreign language|background noise)[\s\S]*[\]\)]$/i;
 
+  // Check if ALL words in the message are in the spam list
+  const isAllSpamWords = words.every(w => commonSpam.includes(w));
+
   if (
-    commonSpam.includes(lowerText) || 
-    audioTags.test(lowerText) ||
-    lowerText.includes("(speaking in foreign language)") ||
+    isAllSpamWords ||
+    audioTags.test(text.trim()) ||
+    lowerText.includes("speaking in foreign language") ||
     lowerText.includes("what is this") ||
     lowerText.includes("report it all") ||
     (lowerText.length < 5 && !/\d/.test(lowerText))
@@ -221,7 +225,7 @@ Description: "${text}"
       institutionType: "Unspecified",
       issueType: "Unspecified",
       isSpam: true,
-      spamReason: "Heuristic: Non-speech audio tag or common testing phrase"
+      spamReason: "Heuristic: Repetitive noise or testing phrase"
     };
   }
 
@@ -246,7 +250,15 @@ Description: "${text}"
       if (response.ok) {
         const data = await response.json();
         const content = data.choices[0]?.message?.content ?? "";
-        return JSON.parse(content);
+        const parsed = JSON.parse(content);
+        
+        // If AI returns everything as Unspecified, it's probably spam
+        if (parsed.location === "Unspecified" && parsed.issueType === "Unspecified") {
+          parsed.isSpam = true;
+          parsed.spamReason = parsed.spamReason || "No concrete incident details found.";
+        }
+        
+        return parsed;
       }
     } catch (error) {
       console.error("Groq extraction failed:", error);
@@ -258,18 +270,24 @@ Description: "${text}"
     const response = await ai.generate({ prompt });
     const jsonMatch = response.text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.location === "Unspecified" && parsed.issueType === "Unspecified") {
+        parsed.isSpam = true;
+      }
+      return parsed;
     }
   } catch (error) {
     console.error("Gemini extraction failed:", error);
   }
 
+  // Final fallback: If we couldn't extract anything, it's spam.
   return {
     location: "Unspecified",
     district: "Unspecified",
     institutionType: "Unspecified",
     issueType: "Unspecified",
-    isSpam: false,
+    isSpam: true,
+    spamReason: "System Fallback: No details could be extracted."
   };
 }
 

@@ -144,7 +144,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground leading-relaxed">
-          {report.institutionType} reported on {report.reportDateLabel}. Emotional indicator: {report.emotionalIndicator}.
+          {report.institutionType} reported on {report.reportDateLabel}.
         </p>
 
         <div className="inline-flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
