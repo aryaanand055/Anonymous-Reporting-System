@@ -259,10 +259,24 @@ export async function POST(req: NextRequest) {
 
     const rawText = normalizeText(data.rawText ?? data.raw_text);
 
-    // AI Extraction for missing fields (Hardware only sends rawText now)
-    let aiExtracted = { location: "Unknown location", district: "Unknown district", institutionType: "Unspecified institution", issueType: "Unspecified issue" };
-    if (rawText && (!data.location || !data.institutionType || !data.issueType)) {
-      console.log("[POST /api/reports] Reconstructing missing metadata from rawText via AI...");
+    // AI Extraction and Spam Detection (Hardware only sends rawText now)
+    let aiExtracted: {
+      location: string;
+      district: string;
+      institutionType: string;
+      issueType: string;
+      isSpam: boolean;
+      spamReason?: string;
+    } = {
+      location: "Unknown location",
+      district: "Unknown district",
+      institutionType: "Unspecified institution",
+      issueType: "Unspecified issue",
+      isSpam: false,
+    };
+
+    if (rawText) {
+      console.log("[POST /api/reports] Analyzing rawText for metadata and spam via AI...");
       aiExtracted = await analyzeReportDetails(rawText);
     }
 
@@ -276,9 +290,16 @@ export async function POST(req: NextRequest) {
         year: "numeric",
       });
     const institutionType = normalizeText(data.institutionType ?? data.institution_type) ?? aiExtracted.institutionType;
-    const issueType = normalizeText(data.issueType ?? data.issue_type) ?? aiExtracted.issueType;
+    let issueType = normalizeText(data.issueType ?? data.issue_type) ?? aiExtracted.issueType;
+
+    // Handle Spam Label
+    if (aiExtracted.isSpam) {
+      issueType = `SPAM: ${issueType}`;
+      console.log(`[POST /api/reports] Content identified as SPAM. Reason: ${aiExtracted.spamReason}`);
+    }
+
     const emotionalIndicator = normalizeText(data.emotionalIndicator ?? data.emotional_indicator) ?? "unspecified";
-    
+
     const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
     const title = `${issueType} at ${institutionType}`;
     const description = narrativeText;
@@ -327,9 +348,9 @@ export async function POST(req: NextRequest) {
       if (e.aiDescription) combinedDescriptions += e.aiDescription + ". ";
     });
 
-    const fullTextForSeverity = combinedDescriptions 
-        ? `${rawText ?? ""}\n\nVisual Evidence Descriptions: ${combinedDescriptions.trim()}` 
-        : (rawText ?? description);
+    const fullTextForSeverity = combinedDescriptions
+      ? `${rawText ?? ""}\n\nVisual Evidence Descriptions: ${combinedDescriptions.trim()}`
+      : (rawText ?? description);
 
     // Base Severity (now incorporates Visual Evidence Descriptions)
     const baseSeverity = await generateSeverityFromText(fullTextForSeverity);
@@ -340,7 +361,12 @@ export async function POST(req: NextRequest) {
 
     const finalScore = calculateClusterSeverity(baseScore, count);
     const adjustedScore = adjustSeverityForEvidence(finalScore, evidenceFlags);
-    const severityLevel = scoreToSeverity(adjustedScore);
+    let severityLevel = scoreToSeverity(adjustedScore);
+
+    // Force LOW severity for Spam
+    if (aiExtracted.isSpam) {
+      severityLevel = "low";
+    }
 
     // Spike Detection
     const last10Min = new Date(Date.now() - 1000 * 60 * 10);
@@ -394,6 +420,8 @@ export async function POST(req: NextRequest) {
       incidentId,
       embedding: newEmbedding,
       evidence,
+      isSpam: aiExtracted.isSpam,
+      spamReason: aiExtracted.spamReason,
       status: "pending",
     });
 

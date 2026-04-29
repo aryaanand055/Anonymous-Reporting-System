@@ -18,6 +18,8 @@ export interface IReport extends Document {
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
+  isSpam?: boolean;
+  spamReason?: string;
   incidentId?: string;
   embedding?: number[];
   evidence?: ReportEvidence[];
@@ -57,6 +59,8 @@ const ReportSchema: Schema = new Schema(
     priority: { type: String, enum: ["low", "medium", "high"], required: true },
     status: { type: String, enum: ["pending", "in_progress", "resolved"], default: "pending" },
     aiSummary: { type: String },
+    isSpam: { type: Boolean, default: false },
+    spamReason: { type: String },
     incidentId: { type: String, index: true },
     embedding: { type: [Number] },
     evidence: { type: [ReportEvidenceSchema], default: [] },

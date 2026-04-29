@@ -113,6 +113,8 @@ export async function getReports(department?: Department): Promise<Report[]> {
       priority: report.priority ?? report.severityLevel ?? "medium",
       status: report.status ?? "pending",
       aiSummary: report.aiSummary,
+      isSpam: report.isSpam ?? false,
+      spamReason: report.spamReason,
       evidence: mapReportEvidence(report.evidence),
       createdAt: report.createdAt instanceof Date ? report.createdAt.toISOString() : new Date().toISOString(),
     }));

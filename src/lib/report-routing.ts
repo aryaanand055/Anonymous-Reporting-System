@@ -71,10 +71,15 @@ Do not rely on keyword matching alone. Infer the correct departments from the ov
 Allowed departments:
 ${departmentCatalog}
 
+### CRITICAL ROUTING RULES:
+- Any theft, snatching, robbery, or violence MUST go to "police_security".
+- Harassment or abuse should go to "human_rights".
+- Fire hazards go to "fire".
+
 Return STRICT JSON only in this exact shape:
 {
-  "primaryDepartment": "human_rights",
-  "departments": ["human_rights", "education"],
+  "primaryDepartment": "police_security",
+  "departments": ["police_security"],
   "reasoning": "short explanation"
 }
 
