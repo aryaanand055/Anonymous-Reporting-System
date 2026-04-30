@@ -173,9 +173,12 @@ async function parseHardwareSubmission(req: NextRequest) {
 
     console.log(`[parseHardwareSubmission] Evidence files found: ${evidenceFiles.length}`, evidenceFiles.map(f => `${f.name} (${f.type || "no-type"}, ${f.size}B)`));
 
+    const providedReportingId = getFormValue(formData, "reporting_id", "reportingId", "trackingId");
+
     return {
       data,
       evidenceFiles,
+      providedReportingId,
     };
   }
 
@@ -206,9 +209,19 @@ async function parseHardwareSubmission(req: NextRequest) {
     data = safeBody as HardwarePayload;
   }
 
+  const providedReportingId =
+    typeof safeBody.reporting_id === "string"
+      ? safeBody.reporting_id
+      : typeof safeBody.reportingId === "string"
+        ? safeBody.reportingId
+        : typeof safeBody.trackingId === "string"
+          ? safeBody.trackingId
+          : undefined;
+
   return {
     data,
     evidenceFiles: [] as File[],
+    providedReportingId,
   };
 }
 
@@ -231,11 +244,13 @@ export async function POST(req: NextRequest) {
     // 2. Parse Body (with optional decryption)
     let data: HardwarePayload;
     let evidenceFiles: File[];
+    let providedReportingId: string | undefined;
 
     try {
-      const result = await parseHardwareSubmission(req);
+      const result: any = await parseHardwareSubmission(req);
       data = result.data;
       evidenceFiles = result.evidenceFiles;
+      providedReportingId = result.providedReportingId;
     } catch (error) {
       return NextResponse.json(
         { error: `Invalid request: ${error instanceof Error ? error.message : "unknown error"}` },
@@ -282,8 +297,11 @@ export async function POST(req: NextRequest) {
       aiExtracted = await analyzeReportDetails(rawText);
     }
 
-    const location = normalizeText(data.location) ?? aiExtracted.location;
-    const district = normalizeText(data.district) ?? aiExtracted.district;
+    const location = normalizeText(data.location) ?? "Unknown location";
+
+ 
+
+    const district = normalizeText(data.district) ?? "Unknown district";
     const reportDateLabel =
       normalizeText(data.reportDateLabel ?? data.date) ??
       new Date().toLocaleDateString("en-US", {
@@ -407,40 +425,55 @@ export async function POST(req: NextRequest) {
 
 
     // 5. Create Report
-    const report = await ReportModel.create({
-      trackingId,
-      title,
-      description,
-      location,
-      district,
-      reportDateLabel,
-      institutionType,
-      issueType,
-      severityLevel,
-      emotionalIndicator,
-      rawText,
-      priority,
-      department,
-      departments,
-      aiSummary,
-      incidentId,
-      embedding: newEmbedding,
-      evidence,
-      isSpam: aiExtracted.isSpam,
+    let report;
+    try {
+      report = await ReportModel.create({
+        trackingId,
+        title,
+        description,
+        location,
+        district,
+        reportDateLabel,
+        institutionType,
+        issueType,
+        severityLevel,
+        emotionalIndicator,
+        rawText,
+        priority,
+        department,
+        departments,
+        aiSummary,
+        incidentId,
+        embedding: newEmbedding,
+        evidence,
+        isSpam: aiExtracted.isSpam,
       spamReason: aiExtracted.spamReason,
       status: "pending",
-    });
+      });
+    } catch (createErr: any) {
+      // Handle duplicate trackingId collisions gracefully: if the report already exists,
+      // respond success since the device-provided reporting id is already stored.
+      if (createErr && createErr.code === 11000 && /trackingId/.test(createErr.message || "")) {
+        console.warn("Duplicate trackingId detected; treating as success for id:", trackingId);
+
+        // Revalidate caches for the dashboard (do not attempt to create again)
+        revalidatePath("/");
+        revalidatePath("/dashboard/admin");
+        revalidateDepartmentPaths(departments);
+
+        return NextResponse.json({ success: true, message: "Report received successfully" });
+      }
+
+      throw createErr;
+    }
 
     // 6. Revalidate caches for the dashboard
     revalidatePath("/");
     revalidatePath("/dashboard/admin");
     revalidateDepartmentPaths(departments);
 
-    return NextResponse.json({
-      success: true,
-      message: "Report received successfully",
-      trackingId: report.trackingId,
-    });
+    // Return only a simple success message to the device (do not return internal IDs)
+    return NextResponse.json({ success: true, message: "Report received successfully" });
 
   } catch (error) {
     console.error("API Error:", error);
