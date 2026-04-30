@@ -228,8 +228,12 @@ async function parseHardwareSubmission(req: NextRequest) {
     data = safeBody as HardwarePayload;
   }
 
-  const rawId = safeBody.reporting_id ?? safeBody.reportingId ?? safeBody.trackingId ?? safeBody.tracking_id;
-  const providedReportingId = rawId !== undefined && rawId !== null ? String(rawId).trim() : undefined;
+  const queryId = req.nextUrl.searchParams.get("trackingId") ?? req.nextUrl.searchParams.get("tracking_id") ?? req.nextUrl.searchParams.get("reporting_id");
+  const headerId = req.headers.get("x-tracking-id") ?? req.headers.get("tracking-id");
+  const bodyId = safeBody.reporting_id ?? safeBody.reportingId ?? safeBody.trackingId ?? safeBody.tracking_id;
+
+  const rawId = queryId ?? headerId ?? bodyId;
+  const providedReportingId = rawId !== undefined && rawId !== null && String(rawId).trim() !== "" ? String(rawId).trim() : undefined;
 
   return {
     data,
@@ -361,7 +365,15 @@ export async function POST(req: NextRequest) {
     let trackingId = providedReportingId
       ?? normalizeText(data.trackingId ?? data.tracking_id);
 
+    console.log(`[POST /api/reports] TRACE ID RESOLUTION:
+      - providedReportingId: ${providedReportingId}
+      - data.trackingId: ${data.trackingId}
+      - data.tracking_id: ${data.tracking_id}
+      - Resolved trackingId before fallback: ${trackingId}
+    `);
+
     if (!trackingId) {
+      console.log(`[POST /api/reports] generating new tracking ID because previous was missing!`);
       trackingId = generateTrackingId();
       for (let attempts = 0; attempts < 5; attempts += 1) {
         const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
