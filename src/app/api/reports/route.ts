@@ -39,11 +39,20 @@ type HardwarePayload = {
 type SeverityValue = "low" | "medium" | "high";
 
 function normalizeText(value: unknown): string | undefined {
-  if (typeof value !== "string") {
+  if (value === null || value === undefined) {
     return undefined;
   }
 
-  const trimmed = value.trim();
+  let strValue = value;
+  if (typeof value === "number") {
+    strValue = String(value);
+  }
+
+  if (typeof strValue !== "string") {
+    return undefined;
+  }
+
+  const trimmed = strValue.trim();
   return trimmed.length ? trimmed : undefined;
 }
 
@@ -210,14 +219,8 @@ async function parseHardwareSubmission(req: NextRequest) {
     data = safeBody as HardwarePayload;
   }
 
-  const providedReportingId =
-    typeof safeBody.reporting_id === "string"
-      ? safeBody.reporting_id
-      : typeof safeBody.reportingId === "string"
-        ? safeBody.reportingId
-        : typeof safeBody.trackingId === "string"
-          ? safeBody.trackingId
-          : undefined;
+  const rawId = safeBody.reporting_id ?? safeBody.reportingId ?? safeBody.trackingId ?? safeBody.tracking_id;
+  const providedReportingId = rawId !== undefined && rawId !== null ? String(rawId).trim() : undefined;
 
   return {
     data,
