@@ -18,6 +18,8 @@ export const runtime = "nodejs";
 const ENCRYPTED_FIELD_NAME = "encrypted";
 
 type HardwarePayload = {
+  trackingId?: string;
+  tracking_id?: string;
   location?: string;
   district?: string;
   reportDateLabel?: string;
@@ -326,13 +328,17 @@ export async function POST(req: NextRequest) {
 
     const incidentId = matchedIncidentId || `INC-${Date.now()}`;
 
-    let trackingId = generateTrackingId();
-    for (let attempts = 0; attempts < 5; attempts += 1) {
-      const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
-      if (!existing) {
-        break;
-      }
+    let trackingId = normalizeText(data.trackingId ?? data.tracking_id);
+    
+    if (!trackingId) {
       trackingId = generateTrackingId();
+      for (let attempts = 0; attempts < 5; attempts += 1) {
+        const existing = await ReportModel.findOne({ trackingId }).select("_id").lean();
+        if (!existing) {
+          break;
+        }
+        trackingId = generateTrackingId();
+      }
     }
 
     console.log(`[POST /api/reports] evidenceFiles.length=${evidenceFiles.length}, calling uploadReportEvidence=${evidenceFiles.length > 0}`);

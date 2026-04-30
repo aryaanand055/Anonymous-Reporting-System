@@ -63,7 +63,7 @@ export async function createReport(data: any) {
       issueType: data.title,
     });
 
-    const trackingId = generateTrackingId();
+    const trackingId = data.trackingId || generateTrackingId();
     const aiSummary = await generateReportSummary(data.description);
     const report = await ReportModel.create({
       ...data,
