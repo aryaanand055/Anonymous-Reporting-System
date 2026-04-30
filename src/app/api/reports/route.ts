@@ -152,6 +152,7 @@ async function parseHardwareSubmission(req: NextRequest) {
       }
     } else {
       data = {
+        trackingId: getFormValue(formData, "trackingId", "tracking_id", "reporting_id", "reportingId"),
         location: getFormValue(formData, "location"),
         district: getFormValue(formData, "district"),
         reportDateLabel: getFormValue(formData, "reportDateLabel", "date"),
@@ -160,7 +161,7 @@ async function parseHardwareSubmission(req: NextRequest) {
         severityLevel: getFormValue(formData, "severityLevel", "severity_level"),
         emotionalIndicator: getFormValue(formData, "emotionalIndicator", "emotional_indicator"),
         rawText: getFormValue(formData, "rawText", "raw_text"),
-      } satisfies HardwarePayload;
+      };
     }
 
     const allFormKeys = [...formData.keys()];
@@ -251,6 +252,7 @@ export async function POST(req: NextRequest) {
       data = result.data;
       evidenceFiles = result.evidenceFiles;
       providedReportingId = result.providedReportingId;
+      console.log(`[POST /api/reports] PARSED → providedReportingId="${providedReportingId}", data.trackingId="${data.trackingId}", data.tracking_id="${data.tracking_id}", raw_text length=${data.raw_text?.length ?? data.rawText?.length ?? 0}`);
     } catch (error) {
       return NextResponse.json(
         { error: `Invalid request: ${error instanceof Error ? error.message : "unknown error"}` },
