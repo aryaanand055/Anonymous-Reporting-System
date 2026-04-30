@@ -43,6 +43,8 @@ export interface Report {
   priority: Priority;
   status: ReportStatus;
   aiSummary?: string;
+  isSpam?: boolean;
+  spamReason?: string;
   evidence?: ReportEvidence[];
   createdAt: Date | string;
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import ReportModel from "@/models/Report";
-import { generateReportSummary, generateSeverityFromText, getEmbedding } from "@/ai/summarize";
+import { generateReportSummary, generateSeverityFromText, getEmbedding, analyzeReportDetails } from "@/ai/summarize";
 import { revalidatePath } from "next/cache";
 import { decryptPayload, type EncryptedPayload } from "@/lib/encryption";
 import { analyzeReportDepartments } from "@/lib/report-routing";
@@ -20,13 +20,18 @@ const ENCRYPTED_FIELD_NAME = "encrypted";
 type HardwarePayload = {
   location?: string;
   district?: string;
-  date?: string;
-  institution_type?: string;
-  issue_type?: string;
-  severity_level?: string;
-  emotional_indicator?: string;
-  raw_text?: string;
+  reportDateLabel?: string;
+  date?: string; // legacy
+  institutionType?: string;
+  institution_type?: string; // legacy
+  issueType?: string;
+  issue_type?: string; // legacy
+  severityLevel?: string;
+  severity_level?: string; // legacy
+  emotionalIndicator?: string;
+  emotional_indicator?: string; // legacy
   rawText?: string;
+  raw_text?: string; // legacy
 };
 
 type SeverityValue = "low" | "medium" | "high";
@@ -78,24 +83,30 @@ function severityToScore(sev: "low" | "medium" | "high"): number {
 }
 
 function scoreToSeverity(score: number): "low" | "medium" | "high" {
-  if (score >= 3) return "high";
-  if (score === 2) return "medium";
+  if (score >= 2.5) return "high";
+  if (score >= 2.0) return "medium";
   return "low";
 }
 
 function calculateClusterSeverity(base: number, count: number) {
   let score = base;
-  score += Math.log2(count + 1); // exponential growth feel
-  return Math.min(Math.round(score), 3);
+  // Only boost if there's a significant cluster (3+ reports)
+  if (count >= 3) {
+    score += Math.log10(count); // Much slower growth than log2
+  }
+  return Math.min(score, 3);
 }
 
 function adjustSeverityForEvidence(score: number, flags: string[]) {
-  if (flags.includes("deepfake") || flags.includes("ai_generated")) {
-    return Math.max(score - 1, 1); // reduce severity
+  // If evidence is suspicious, always penalize the score
+  if (flags.includes("deepfake") || flags.includes("ai_generated") || flags.includes("manipulated")) {
+    return Math.max(score - 1, 1);
   }
 
-  if (flags.length === 0) {
-    return Math.min(score + 1, 3); // trusted evidence boost
+  // Only boost if the evidence is perfectly clean AND the current score is low
+  // This prevents Medium reports from becoming High just because they have a photo
+  if (flags.length === 0 && score < 2) {
+    return Math.min(score + 0.5, 3); // Subtle boost instead of +1
   }
 
   return score;
@@ -141,13 +152,12 @@ async function parseHardwareSubmission(req: NextRequest) {
       data = {
         location: getFormValue(formData, "location"),
         district: getFormValue(formData, "district"),
-        date: getFormValue(formData, "date"),
-        institution_type: getFormValue(formData, "institution_type"),
-        issue_type: getFormValue(formData, "issue_type"),
-        severity_level: getFormValue(formData, "severity_level"),
-        emotional_indicator: getFormValue(formData, "emotional_indicator"),
-        raw_text: getFormValue(formData, "raw_text"),
-        rawText: getFormValue(formData, "rawText"),
+        reportDateLabel: getFormValue(formData, "reportDateLabel", "date"),
+        institutionType: getFormValue(formData, "institutionType", "institution_type"),
+        issueType: getFormValue(formData, "issueType", "issue_type"),
+        severityLevel: getFormValue(formData, "severityLevel", "severity_level"),
+        emotionalIndicator: getFormValue(formData, "emotionalIndicator", "emotional_indicator"),
+        rawText: getFormValue(formData, "rawText", "raw_text"),
       } satisfies HardwarePayload;
     }
 
@@ -262,32 +272,55 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const rawText = normalizeText(data.raw_text ?? data.rawText);
+    const rawText = normalizeText(data.rawText ?? data.raw_text);
 
-    if (!rawText) {
-      return NextResponse.json({ error: "raw_text is required" }, { status: 400 });
+    // AI Extraction and Spam Detection (Hardware only sends rawText now)
+    let aiExtracted: {
+      location: string;
+      district: string;
+      institutionType: string;
+      issueType: string;
+      isSpam: boolean;
+      spamReason?: string;
+    } = {
+      location: "Unknown location",
+      district: "Unknown district",
+      institutionType: "Unspecified institution",
+      issueType: "Unspecified issue",
+      isSpam: false,
+    };
+
+    if (rawText) {
+      console.log("[POST /api/reports] Analyzing rawText for metadata and spam via AI...");
+      aiExtracted = await analyzeReportDetails(rawText);
     }
 
-    const location = normalizeText(data.location);
+    const location = normalizeText(data.location) ?? "Unknown location";
 
-    if (!location) {
-      return NextResponse.json({ error: "location is required" }, { status: 400 });
-    }
+ 
 
     const district = normalizeText(data.district) ?? "Unknown district";
     const reportDateLabel =
-      normalizeText(data.date) ??
+      normalizeText(data.reportDateLabel ?? data.date) ??
       new Date().toLocaleDateString("en-US", {
         month: "long",
         day: "numeric",
         year: "numeric",
       });
-    const institutionType = normalizeText(data.institution_type) ?? "Unspecified institution";
-    const issueType = normalizeText(data.issue_type) ?? "Incident Report";
-    const emotionalIndicator = normalizeText(data.emotional_indicator) ?? "unspecified";
-    const narrativeText = rawText;
-    const title = rawText.slice(0, 120);
-    const description = rawText;
+    const institutionType = normalizeText(data.institutionType ?? data.institution_type) ?? aiExtracted.institutionType;
+    let issueType = normalizeText(data.issueType ?? data.issue_type) ?? aiExtracted.issueType;
+
+    // Handle Spam Label
+    if (aiExtracted.isSpam) {
+      issueType = `SPAM: ${issueType}`;
+      console.log(`[POST /api/reports] Content identified as SPAM. Reason: ${aiExtracted.spamReason}`);
+    }
+
+    const emotionalIndicator = normalizeText(data.emotionalIndicator ?? data.emotional_indicator) ?? "unspecified";
+
+    const narrativeText = rawText ?? `${issueType} reported at ${institutionType} in ${location}.`;
+    const title = `${issueType} at ${institutionType}`;
+    const description = narrativeText;
 
     await dbConnect();
 
@@ -352,7 +385,12 @@ export async function POST(req: NextRequest) {
 
     const finalScore = calculateClusterSeverity(baseScore, count);
     const adjustedScore = adjustSeverityForEvidence(finalScore, evidenceFlags);
-    const severityLevel = scoreToSeverity(adjustedScore);
+    let severityLevel = scoreToSeverity(adjustedScore);
+
+    // Force LOW severity for Spam
+    if (aiExtracted.isSpam) {
+      severityLevel = "low";
+    }
 
     // Spike Detection
     const last10Min = new Date(Date.now() - 1000 * 60 * 10);
@@ -408,7 +446,9 @@ export async function POST(req: NextRequest) {
         incidentId,
         embedding: newEmbedding,
         evidence,
-        status: "pending",
+        isSpam: aiExtracted.isSpam,
+      spamReason: aiExtracted.spamReason,
+      status: "pending",
       });
     } catch (createErr: any) {
       // Handle duplicate trackingId collisions gracefully: if the report already exists,

@@ -74,12 +74,27 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
   const isPdf = selectedEvidence?.contentType === "application/pdf";
 
   return (
-    <Card className="overflow-hidden border-l-4 border-l-primary/20 hover:shadow-md transition-all duration-200">
+    <Card className={cn(
+      "overflow-hidden border-l-4 transition-all duration-200 hover:shadow-md",
+      report.isSpam 
+        ? "border-l-red-500 bg-red-50/50 dark:bg-red-950/20 shadow-sm ring-1 ring-red-500/20" 
+        : "border-l-primary/20"
+    )}>
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
         <div className="space-y-1">
-          <CardTitle className="text-lg font-headline font-semibold text-foreground leading-tight">
-            {report.issueType}
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className={cn(
+              "text-lg font-headline font-semibold leading-tight",
+              report.isSpam ? "text-red-700 dark:text-red-400" : "text-foreground"
+            )}>
+              {report.issueType}
+            </CardTitle>
+            {report.isSpam && (
+              <Badge variant="destructive" className="h-5 text-[10px] uppercase font-bold tracking-tighter px-1.5">
+                Spam Detected
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
               <MapPin className="h-3.5 w-3.5" />
@@ -129,7 +144,7 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground leading-relaxed">
-          {report.institutionType} reported on {report.reportDateLabel}. Emotional indicator: {report.emotionalIndicator}.
+          {report.institutionType} reported on {report.reportDateLabel}.
         </p>
 
         <div className="inline-flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -145,17 +160,32 @@ export function ReportCard({ report, showAdminActions = true }: ReportCardProps)
           ))}
         </div>
 
-        {report.aiSummary && (
-          <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-500">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary/80">
+        {(report.aiSummary || report.isSpam) && (
+          <div className={cn(
+            "border rounded-lg p-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-500",
+            report.isSpam ? "bg-red-500/10 border-red-500/20" : "bg-primary/5 border-primary/10"
+          )}>
+            <div className={cn(
+              "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider",
+              report.isSpam ? "text-red-600 dark:text-red-400" : "text-primary/80"
+            )}>
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                <span className={cn(
+                  "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                  report.isSpam ? "bg-red-500" : "bg-primary"
+                )}></span>
+                <span className={cn(
+                  "relative inline-flex rounded-full h-2 w-2",
+                  report.isSpam ? "bg-red-500" : "bg-primary"
+                )}></span>
               </span>
-              AI Insight
+              {report.isSpam ? "Spam Analysis" : "AI Insight"}
             </div>
-            <p className="text-xs italic text-foreground leading-snug">
-              "{report.aiSummary}"
+            <p className={cn(
+              "text-xs italic leading-snug",
+              report.isSpam ? "text-red-800 dark:text-red-300" : "text-foreground"
+            )}>
+              "{report.isSpam ? (report.spamReason || "This content was identified as irrelevant or automated spam.") : report.aiSummary}"
             </p>
           </div>
         )}

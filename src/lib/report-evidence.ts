@@ -115,64 +115,132 @@ async function analyzeEvidence(file: File, mimeType: string, buffer: Buffer): Pr
   }
 
   const mediaTypeStr = isImage ? "image" : isVideo ? "video" : "document";
+  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  let lastError = "";
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                text: `You are a forensic AI analyst. Analyze this ${mediaTypeStr} and respond with ONLY a raw JSON object (no markdown, no backticks, no explanation). The JSON must have exactly two keys:\n- "flags": an array of strings describing any concerns (e.g. "manipulated", "deepfake", "ai_generated"), or an empty array [] if the ${mediaTypeStr} appears authentic.\n- "description": a concise 1-2 sentence description of what is visually shown in the ${mediaTypeStr}.\n\nExample: {"flags": [], "description": "A photo of a flooded street with debris visible."}`
-              },
-              { inlineData: { mimeType: effectiveMimeType, data: buffer.toString("base64") } }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024,
+  for (const model of MODELS) {
+    let retries = 0;
+    const maxRetries = 2;
+
+    while (retries <= maxRetries) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  {
+                    text: `You are a forensic AI analyst. Analyze this ${mediaTypeStr} and respond with ONLY a raw JSON object (no markdown, no backticks, no explanation). The JSON must have exactly two keys:\n- "flags": an array of strings describing any concerns (e.g. "manipulated", "deepfake", "ai_generated"), or an empty array [] if the ${mediaTypeStr} appears authentic.\n- "description": a concise 1-2 sentence description of what is visually shown in the ${mediaTypeStr}.\n\nExample: {"flags": [], "description": "A photo of a flooded street with debris visible."}`
+                  },
+                  { inlineData: { mimeType: effectiveMimeType, data: buffer.toString("base64") } }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 1024,
+              }
+            })
           }
-        })
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const parts: Array<{ text?: string; thought?: boolean }> = data?.candidates?.[0]?.content?.parts ?? [];
+          const textPart = [...parts].reverse().find((p) => !p.thought && typeof p.text === "string");
+          const rawText: string = textPart?.text ?? "";
+          console.log(`[analyzeEvidence] [${model}] Raw response:`, rawText.slice(0, 100));
+
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed.flags)) {
+              result.flags = [...new Set([...result.flags, ...parsed.flags.filter((f: unknown) => typeof f === "string")])];
+            }
+            if (parsed.description && typeof parsed.description === "string" && parsed.description.trim()) {
+              result.description = parsed.description.trim();
+              console.log(`[analyzeEvidence] [${model}] Success: ${result.description}`);
+              return result;
+            }
+          }
+        }
+
+        if (response.status === 429 || response.status === 503 || response.status === 500) {
+          const waitTime = Math.pow(2, retries) * 1000;
+          console.warn(`[analyzeEvidence] [${model}] Status ${response.status}, retrying in ${waitTime}ms...`);
+          await new Promise(r => setTimeout(r, waitTime));
+          retries++;
+          continue;
+        }
+
+        const errText = await response.text();
+        lastError = `[${model}] ${response.status}: ${errText}`;
+        break; // Try next model
+      } catch (error) {
+        lastError = `[${model}] ${error instanceof Error ? error.message : "unknown error"}`;
+        break; // Try next model
       }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[analyzeEvidence] Gemini API error ${response.status}:`, errorText);
-      return result;
     }
-
-    const data = await response.json();
-    // Gemini 2.5 returns thinking tokens first (part.thought = true) — find the actual text part
-    const parts: Array<{ text?: string; thought?: boolean }> = data?.candidates?.[0]?.content?.parts ?? [];
-    const textPart = [...parts].reverse().find((p) => !p.thought && typeof p.text === "string");
-    const rawText: string = textPart?.text ?? "";
-    console.log("[analyzeEvidence] Raw Gemini response:", rawText.slice(0, 300));
-
-    // Extract JSON object even if model wraps it in extra text
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.warn("[analyzeEvidence] Could not find JSON object in response:", rawText);
-      return result;
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    if (Array.isArray(parsed.flags)) {
-      result.flags.push(...parsed.flags.filter((f: unknown) => typeof f === "string"));
-    }
-    if (parsed.description && typeof parsed.description === "string" && parsed.description.trim()) {
-      result.description = parsed.description.trim();
-    }
-
-    console.log("[analyzeEvidence] Parsed result:", result);
-  } catch (error) {
-    console.error("[analyzeEvidence] Gemini Vision AI Analysis failed:", error);
   }
 
+  // Final Fallback: Groq (Images only)
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (isImage && groqApiKey) {
+    try {
+      console.log("[analyzeEvidence] Attempting Groq vision fallback...");
+      const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${groqApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.2-11b-vision-preview",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Analyze this image and respond with ONLY a raw JSON object (no backticks). JSON keys: "flags" (array of concern strings like "manipulated" or []) and "description" (1-2 sentence description).`
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: `data:${effectiveMimeType};base64,${buffer.toString("base64")}` }
+                }
+              ]
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 512,
+        }),
+      });
+
+      if (groqResponse.ok) {
+        const groqData = await groqResponse.json();
+        const rawText = groqData.choices[0]?.message?.content ?? "";
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed.flags)) result.flags = [...new Set([...result.flags, ...parsed.flags])];
+          if (parsed.description) {
+            result.description = parsed.description.trim();
+            console.log(`[analyzeEvidence] [Groq] Success: ${result.description}`);
+            return result;
+          }
+        }
+      } else {
+        const errText = await groqResponse.text();
+        console.warn(`[analyzeEvidence] Groq API error: ${errText}`);
+      }
+    } catch (err) {
+      console.error("[analyzeEvidence] Groq fallback failed:", err);
+    }
+  }
+
+  console.error("[analyzeEvidence] All models failed:", lastError);
   return result;
 }
 
