@@ -297,11 +297,8 @@ export async function POST(req: NextRequest) {
       aiExtracted = await analyzeReportDetails(rawText);
     }
 
-    const location = normalizeText(data.location) ?? "Unknown location";
-
- 
-
-    const district = normalizeText(data.district) ?? "Unknown district";
+    const location = normalizeText(data.location) ?? aiExtracted.location ?? "Unknown location";
+    const district = normalizeText(data.district) ?? aiExtracted.district ?? "Unknown district";
     const reportDateLabel =
       normalizeText(data.reportDateLabel ?? data.date) ??
       new Date().toLocaleDateString("en-US", {
@@ -346,8 +343,10 @@ export async function POST(req: NextRequest) {
 
     const incidentId = matchedIncidentId || `INC-${Date.now()}`;
 
-    let trackingId = normalizeText(data.trackingId ?? data.tracking_id);
-    
+    // Use device-provided tracking ID; fall back to auto-generation only if missing
+    let trackingId = providedReportingId
+      ?? normalizeText(data.trackingId ?? data.tracking_id);
+
     if (!trackingId) {
       trackingId = generateTrackingId();
       for (let attempts = 0; attempts < 5; attempts += 1) {
@@ -358,6 +357,8 @@ export async function POST(req: NextRequest) {
         trackingId = generateTrackingId();
       }
     }
+
+    console.log(`[POST /api/reports] Using trackingId: ${trackingId} (device-provided: ${!!providedReportingId})`);
 
     console.log(`[POST /api/reports] evidenceFiles.length=${evidenceFiles.length}, calling uploadReportEvidence=${evidenceFiles.length > 0}`);
     const evidence = evidenceFiles.length ? await uploadReportEvidence(trackingId, incidentId, evidenceFiles) : [];
