@@ -199,7 +199,16 @@ async function parseHardwareSubmission(req: NextRequest) {
     body = {};
   }
 
-  const safeBody = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const rawBody = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  console.log(`[parseHardwareSubmission] FULL JSON BODY:`, JSON.stringify(rawBody));
+
+  // Auto-unwrap if the device nested the data inside a 'payload' or 'data' key
+  const safeBody = (rawBody.payload && typeof rawBody.payload === "object")
+    ? rawBody.payload as Record<string, unknown>
+    : (rawBody.data && typeof rawBody.data === "object")
+      ? rawBody.data as Record<string, unknown>
+      : rawBody;
+
   const encryptedField = safeBody.encrypted;
 
   let data: HardwarePayload;
@@ -453,8 +462,8 @@ export async function POST(req: NextRequest) {
         embedding: newEmbedding,
         evidence,
         isSpam: aiExtracted.isSpam,
-      spamReason: aiExtracted.spamReason,
-      status: "pending",
+        spamReason: aiExtracted.spamReason,
+        status: "pending",
       });
     } catch (createErr: any) {
       // Handle duplicate trackingId collisions gracefully: if the report already exists,
